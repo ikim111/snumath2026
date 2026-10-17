@@ -230,17 +230,28 @@ async function loadMetas() {
   const rs = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/meta.json`)));
   S.cfg.books.forEach((id, i) => { if (rs[i].data) S.metas[id] = rs[i].data; });
 }
-const bookName = (id) => { const m = S.metas[id]; return m ? `${m.period || ''} ${m.publisher || ''} ${m.title || id}`.trim() : id; };
+const bookName = (id) => { const m = S.metas[id]; if (!m) return id; if (m.type === 'curriculum') return `${m.period || ''} 교육과정`.trim(); return `${m.period || ''} ${m.publisher || ''} ${m.title || id}`.trim(); };
 
 function fillHeader() {
-  $('#bookSel').innerHTML = S.cfg.books.map((id) => `<option value="${esc(id)}">${esc(id)} · ${esc(bookName(id))}</option>`).join('') || '<option value="">(교과서 없음)</option>';
+  $('#bookSel').innerHTML = S.cfg.books.map((id) => `<option value="${esc(id)}">${esc(isCur(id) ? bookName(id) : id + ' · ' + bookName(id))}</option>`).join('') || '<option value="">(교과서 없음)</option>';
   $('#bookSel').onchange = (e) => selectBook(e.target.value);
   const saved = ls.get('coder');
   $('#coderSel').innerHTML = '<option value="">선택하세요</option>' + S.cfg.coders.map((c) => `<option ${c === saved ? 'selected' : ''}>${esc(c)}</option>`).join('');
   S.coder = S.cfg.coders.includes(saved) ? saved : '';
-  $('#coderSel').onchange = async (e) => { S.coder = e.target.value; ls.set('coder', S.coder); await loadMine(); renderAll(); };
+  $('#coderSel').onchange = (e) => setCoder(e.target.value);
+  if (!S.coder) showWho();
 }
 
+async function setCoder(name) {
+  S.coder = name; ls.set('coder', name); $('#coderSel').value = name;
+  $('#who').classList.add('hidden');
+  await loadMine(); renderAll();
+}
+function showWho() {
+  $('#whoList').innerHTML = S.cfg.coders.map((c) => `<button data-who="${esc(c)}">${esc(c)}</button>`).join('');
+  $('#whoList').onclick = (e) => { const b = e.target.closest('[data-who]'); if (b) setCoder(b.dataset.who); };
+  $('#who').classList.remove('hidden');
+}
 function bindTabs() {
   $('#tabs').onclick = (e) => {
     const t = e.target.dataset.tab; if (!t) return;

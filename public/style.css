@@ -159,3 +159,9 @@ table.t tr.dis td.fin { background: #fff; }
 .guide-t td { vertical-align: top; line-height: 1.5; }
 .gl { line-height: 1.8; padding-left: 20px; }
 .sub a { color: var(--accent); }
+
+/* 이름 고르기 */
+.who-card { text-align: center; }
+.who-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.who-list button { font-size: 18px; padding: 14px; border-radius: 10px; font-weight: 600; }
+.who-list button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

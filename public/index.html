@@ -14,7 +14,7 @@
 <body>
 <header class="top">
   <div class="brand">통계 단원 코딩</div>
-  <label class="sel">교과서 <select id="bookSel"></select></label>
+  <label class="sel">목록 <select id="bookSel"></select></label>
   <label class="sel">내 이름 <select id="coderSel"></select></label>
   <nav class="tabs" id="tabs">
     <button data-tab="code" class="on">코딩</button>
@@ -95,6 +95,13 @@
     <p>조원에게 받은 주소로 들어오세요.</p>
     <input id="gateKey" placeholder="주소 뒤 단어">
     <button id="gateGo" class="primary">들어가기</button>
+  </div>
+</div>
+<div id="who" class="gate hidden">
+  <div class="gate-card who-card">
+    <h2>누구인가요?</h2>
+    <p class="hint">고른 이름으로 코딩이 저장됩니다. 나중에 위쪽 '내 이름'에서 바꿀 수 있어요.</p>
+    <div id="whoList" class="who-list"></div>
   </div>
 </div>
 <div id="toast" class="toast hidden"></div>
