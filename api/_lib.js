@@ -53,7 +53,8 @@ export async function readJSON(path) {
   const r = await blobGet(path, { useCache: false });
   if (!r || r.statusCode !== 200) return { data: null, etag: null };
   const text = await new Response(r.stream).text();
-  return { data: JSON.parse(text), etag: r.blob.etag };
+  // 읽을 때 압축 때문에 약한 ETag(W/"…")가 올 수 있어 쓰기 조건과 맞도록 접두어 제거
+  return { data: JSON.parse(text), etag: (r.blob.etag || '').replace(/^W\//, '') };
 }
 
 // etag가 있으면 그 버전일 때만 덮어씀, 없으면 새 파일일 때만 씀 → 동시 수정 충돌 방지
