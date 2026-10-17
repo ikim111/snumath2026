@@ -246,6 +246,7 @@ function bindTabs() {
     const t = e.target.dataset.tab; if (!t) return;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
     document.querySelectorAll('.tab').forEach((s) => s.classList.toggle('on', s.id === 'tab-' + t));
+    if (t === 'guide') renderGuide();
     if (t === 'compare') renderCompare();
     if (t === 'stats') renderStats();
     if (t === 'settings') renderSettings();
@@ -457,6 +458,7 @@ function renderPanel() {
     ${stages.map((s) => `<div class="stage-row"><div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage)}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${it.code === c.code ? 'on' : ''}" style="${it.code === c.code ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}" title="${esc(c.desc)}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div></div>`).join('')}
     <div class="code-desc" id="codeDesc">${it.code ? esc((codeInfo(it.code) || {}).desc || '') : ''}</div>
+    <div class="sub"><a href="#" id="toGuide">분석틀·판단 규칙 보기</a></div>
     <div class="sub">내용 요소</div>
     <div class="chips">${S.cfg.contentElements.map((c) => `<button data-ce="${esc(c)}" class="${(it.ce || []).includes(c) ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
     <div class="checks"><label><input type="checkbox" id="cCrit" ${it.crit ? 'checked' : ''}> 비판</label><label><input type="checkbox" id="cComm" ${it.comm ? 'checked' : ''}> 소통</label></div>
@@ -481,6 +483,7 @@ function renderPanel() {
     const ce = new Set(it.ce || []); ce.has(b.dataset.ce) ? ce.delete(b.dataset.ce) : ce.add(b.dataset.ce);
     setItem(u.id, { ce: [...ce] });
   });
+  $('#toGuide').onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=guide]').click(); };
   $('#cCrit').onchange = (e) => setItem(u.id, { crit: e.target.checked });
   $('#cComm').onchange = (e) => setItem(u.id, { comm: e.target.checked });
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
@@ -1026,6 +1029,62 @@ function barChart(cats, groups, val, palette) {
   s += `<line x1="${L}" x2="${W - 10}" y1="${T + ih}" y2="${T + ih}" stroke="#9a978d"/></svg>`;
   s += `<div class="legend">${groups.map((g, j) => `<span><i style="background:${palette[j % palette.length]}"></i>${esc(g)}</span>`).join('')}</div>`;
   return s;
+}
+
+// ───────── 분석틀 안내 ─────────
+function renderGuide() {
+  const B = $('#guideBody');
+  const ours = S.cfg.activeFramework === '우리초안';
+  const stages = [];
+  fw().forEach((c) => { let g = stages.find((x) => x.stage === c.stage); if (!g) stages.push(g = { stage: c.stage, codes: [] }); g.codes.push(c); });
+  B.innerHTML = `<h2>분석틀 안내 <span class="hint">지금 쓰는 분석틀: ${esc(S.cfg.activeFramework)}</span></h2>
+    <p class="lead">교과서 발문과 교육과정 문장이 학생에게 <b>통계적 탐구의 어느 단계</b>를 시키는지 붙이는 이름표입니다.
+    뼈대는 GAISE의 4단계(문제 – 수집 – 분석 – 해석)이고, 각 단계를 선행연구가 구분한 하위 행동으로 나눴습니다.
+    <b>교과서는 세부 코드</b>(A1a 등), <b>교육과정은 기본 코드</b>(A1 등)까지 코딩하며, 세부 코드를 묶으면 기본 코드가 되므로 두 문서를 그대로 비교할 수 있습니다.</p>
+
+    <h3>코드</h3>
+    <table class="t guide-t"><tr><th>단계</th><th>코드</th><th class="l">이름</th><th class="l">학생이 하는 일</th></tr>
+      ${stages.map((g) => g.codes.map((c, i) => `<tr>${i === 0 ? `<td rowspan="${g.codes.length}" style="color:${stageColor(c.code)};font-weight:700">${esc(g.stage)}</td>` : ''}<td><b>${esc(c.code)}</b></td><td class="l">${esc(c.name)}</td><td class="l">${esc(c.desc)}</td></tr>`).join('')).join('')}
+    </table>
+    <p class="note">코드 번호는 작업 순서일 뿐 수준이 아닙니다. 코드 목록은 설정 탭에서 고칠 수 있고, 이 표도 함께 바뀝니다.</p>
+
+    <h3>분석 단위</h3>
+    <ul class="gl">
+      <li><b>교과서</b>: 학생이 풀어야 하는 과제 하나 (이기마·유명근, 2015). 하위 문항이 <b>한 답을 위한 순차적 단계면 1개</b>, 서로 독립적이면 각각 셉니다. → 순차적인데 나뉘어 있으면 Shift+클릭으로 골라 <b>합치기</b>.</li>
+      <li>한 발문이 여러 행동을 <b>명시</b>하면 행을 나눕니다(예: "알맞은 것을 골라 나타내시오" → A4 + A3). 숨은 행동은 코딩하지 않습니다. → <b>행 나누기</b>.</li>
+      <li><b>박스 유형</b>: 본 과제 · 도입 질문 · 예제(풀이 제시) · 이전 학년 복습. 기본 집계는 <b>본 과제 + 도입 질문</b>이며, 예제와 복습은 박스만 두고 코드는 선택입니다. 집계 화면에서 유형별로 넣고 뺄 수 있습니다.</li>
+      <li><b>교육과정</b>: 성취기준·해설·고려 사항을 <b>학생 행동 동사 하나</b> 단위로 나눕니다. 다른 행동을 위한 수단으로만 쓰인 동사는 따로 세지 않습니다(성아연·박지선, 2019).</li>
+      <li><b>X와 '분석 대상 아님'은 다릅니다.</b> X는 학생 과제이지만 어느 단계에도 해당하지 않는 것(분모에 남김), 본문 설명·학습 목표·공학 도구 조작 안내는 처음부터 박스를 치지 않습니다.</li>
+    </ul>
+
+    ${ours ? `<h3>헷갈리는 쌍</h3>
+    <table class="t guide-t"><tr><th>쌍</th><th class="l">이렇게 가른다</th><th class="l">예</th></tr>
+      <tr><td>A1a / A1b</td><td class="l">한 칸을 그대로 읽으면 A1a, 둘 이상 비교·여러 칸 합치면 A1b</td><td class="l">"60점대는 몇 명?" A1a / "60점 이상은 몇 명?" A1b</td></tr>
+      <tr><td>A1b / A2a</td><td class="l">더하기만 하면 A1b, 공식(평균·상대도수·백분율)을 쓰면 A2a</td><td class="l">"모두 몇 명?" A1b / "전체의 몇 %?" A2a</td></tr>
+      <tr><td>A1 / I1</td><td class="l">답이 자료에 대한 말(값·계급)이면 A1, 맥락 속 대상에 대한 판단('~라고 할 수 있다')이면 I1</td><td class="l">"어느 마을이 상대적으로 덜 쓴다고 할 수 있는가?" I1</td></tr>
+      <tr><td>A4 / I3</td><td class="l">표현을 고르면 A4, 이미 있는 표현·주장을 평가하면 I3</td><td class="l">"어떤 그래프가 적절한가?" A4 / "이 그래프의 문제점은?" I3</td></tr>
+      <tr><td>A4 / I1</td><td class="l">"이유를 설명하시오": 대푯값·표현 선택 이유면 A4, 결론의 근거면 I1</td><td class="l"></td></tr>
+      <tr><td>C3 / I2 / I3</td><td class="l">자료 자체(수집 방법·대표성)는 C3, 결과를 어디까지 일반화할지는 I2, 이미 있는 결론 평가는 I3</td><td class="l">(분석 전) "10명에게만 물은 자료로 학교 전체를 알 수 있을까?" C3</td></tr>
+      <tr><td>P2 / I4</td><td class="l">탐구 시작의 질문 만들기는 P2, 결과를 본 뒤 새 질문은 I4</td><td class="l"></td></tr>
+    </table>
+
+    <h3>교육과정 동사 대응</h3>
+    <table class="t guide-t"><tr><th class="l">동사</th><th>기본 코드</th></tr>
+      <tr><td class="l">(탐구 문제를) 설정하다</td><td>P2</td></tr>
+      <tr><td class="l">계획을 세우다·수정하다 / 수집하다·조사하다 / (자료가) 적절한지 판단하다</td><td>C1 / C2 / C3</td></tr>
+      <tr><td class="l">읽다, 비교하다, (분포·관계를) 설명하다</td><td>A1</td></tr>
+      <tr><td class="l">구하다 / 뜻을 알다·이해하다(개념)</td><td>A2</td></tr>
+      <tr><td class="l">나타내다·정리하다(표·그래프)</td><td>A3</td></tr>
+      <tr><td class="l">(적절한 것을) 선택하다, 목적에 맞게 나타내다</td><td>A4</td></tr>
+      <tr><td class="l">해석하다</td><td>탐구 문제·맥락과 연결되면 I1, 표·그래프 자체 해석이면 A1</td></tr>
+      <tr><td class="l">(자료를 바탕으로) 의사결정하다·토론하다</td><td>I1</td></tr>
+      <tr><td class="l">예상하다·일반화하다</td><td>I2</td></tr>
+      <tr><td class="l">오류를 찾다, 비판적으로 판단하다</td><td>I3</td></tr>
+      <tr><td class="l">분석하다(하위 활동 없음)</td><td>A (단계만)</td></tr>
+      <tr><td class="l">인식하다, 태도를 갖다</td><td>X (가치·태도)</td></tr>
+    </table>` : `<p class="note">헷갈리는 쌍 규칙과 교육과정 동사 대응표는 '우리초안' 기준이라, 다른 분석틀을 쓰는 동안에는 숨깁니다.</p>`}
+    <p class="note">근거: GAISE I(Franklin et al., 2007), GAISE II(Bargagliotti et al., 2020), Curcio(1987), 이기마·유명근(2015), 성아연·박지선(2019), Krippendorff(2004). 자세한 설계 근거는 조원 검토용 자료 「통계적 문제해결 단계 분석틀: 어떻게, 왜 이렇게 짰는가」 참고.
+    이 틀은 초안이며 조원들의 코딩과 합의로 확정합니다.</p>`;
 }
 
 // ───────── 설정 화면 ─────────
