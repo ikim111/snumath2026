@@ -146,12 +146,14 @@ const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.k
 
 // ───────── 시작 ─────────
 function showGate() { $('#gate').classList.remove('hidden'); }
-$('#gateGo').onclick = () => { const k = $('#gateKey').value.trim(); if (k) { location.hash = k; location.reload(); } };
+$('#gateGo').onclick = () => { const k = $('#gateKey').value.trim(); if (k) location.href = '/' + k; };
 $('#gateKey').onkeydown = (e) => { if (e.key === 'Enter') $('#gateGo').click(); };
 
 async function init() {
+  // 주소 뒤 단어(snumath2026.vercel.app/analysis)가 곧 접근 키
+  const pm = location.pathname.match(/^\/([\w-]+)\/?$/);
   const m = location.hash.match(/^#(?:k=)?([\w-]+)/);
-  S.key = (m && m[1]) || ls.get('appkey') || '';
+  S.key = (pm && pm[1]) || (m && m[1]) || ls.get('appkey') || '';
   if (!S.key) return showGate();
   ls.set('appkey', S.key);
 
@@ -851,7 +853,7 @@ function barChart(cats, groups, val, palette) {
 function renderSettings() {
   const B = $('#settingsBody');
   const c = S.cfg;
-  const link = `${location.host}/#${S.key}`;
+  const link = `${location.host}/${S.key}`;
   B.innerHTML = `<h2>설정</h2>
     <h3>조원에게 보낼 링크</h3>
     <div class="bar"><input id="shareLink" value="${esc(link)}" readonly style="flex:1;min-width:320px"><button id="copyLink">복사</button></div>

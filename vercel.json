@@ -1,5 +1,25 @@
 {
   "outputDirectory": "public",
-  "functions": { "api/*.js": { "maxDuration": 30 } },
-  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }]
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/:key([A-Za-z0-9_-]+)",
+      "destination": "/index.html"
+    }
+  ]
 }

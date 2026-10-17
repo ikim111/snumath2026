@@ -19,7 +19,8 @@ http.createServer(async (req, res) => {
     res.writeHead(out.status, Object.fromEntries(out.headers));
     return res.end(Buffer.from(await out.arrayBuffer()));
   }
-  const f = path.join('public', url.pathname === '/' ? 'index.html' : url.pathname);
+  let f = path.join('public', url.pathname === '/' ? 'index.html' : url.pathname);
+  if (/^\/[\w-]+\/?$/.test(url.pathname) && !path.extname(url.pathname)) f = 'public/index.html';
   try { const b = await fs.readFile(f); res.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' }); res.end(b); }
   catch { res.writeHead(404); res.end('not found'); }
 }).listen(process.env.PORT || 3000, () => console.log('http://localhost:' + (process.env.PORT || 3000) + '/#k=' + process.env.APP_KEY));
