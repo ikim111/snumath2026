@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>통계 단원 코딩</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<header class="top">
+  <div class="brand">통계 단원 코딩</div>
+  <label class="sel">교과서 <select id="bookSel"></select></label>
+  <label class="sel">내 이름 <select id="coderSel"></select></label>
+  <nav class="tabs" id="tabs">
+    <button data-tab="code" class="on">코딩</button>
+    <button data-tab="compare">비교·일치율</button>
+    <button data-tab="stats">통계표</button>
+    <button data-tab="settings">설정</button>
+  </nav>
+  <div id="saveState" class="save"></div>
+</header>
+
+<main>
+  <!-- 코딩 -->
+  <section id="tab-code" class="tab on">
+    <div class="code-layout">
+      <aside class="pages" id="pageList"></aside>
+      <div class="viewer">
+        <div class="vtool">
+          <button id="prevPage" title="이전 쪽">◀</button>
+          <span id="pageLabel"></span>
+          <button id="nextPage" title="다음 쪽">▶</button>
+          <span class="sp"></span>
+          <label class="toggle"><input type="checkbox" id="editMode"> 박스 편집</label>
+          <span id="editHelp" class="hint hidden">빈 곳을 끌어서 새 박스 · 박스를 끌어서 이동 · 오른쪽 아래 모서리로 크기 조절 · Delete 키로 삭제</span>
+          <span class="sp"></span>
+          <button id="zoomOut">−</button><span id="zoomLabel">100%</span><button id="zoomIn">+</button>
+        </div>
+        <div class="stage-wrap" id="stageWrap">
+          <div class="stage" id="stage">
+            <img id="pageImg" alt="">
+            <div id="boxes"></div>
+            <div id="drawBox" class="box drawing hidden"></div>
+          </div>
+          <div id="noPage" class="empty hidden">이 교과서에는 아직 쪽 이미지가 없습니다.</div>
+        </div>
+      </div>
+      <aside class="panel">
+        <div id="unitPanel"></div>
+        <div class="unit-list-head">
+          <b>분석 단위</b> <span id="progress"></span>
+          <label class="mini"><input type="checkbox" id="onlyTodo"> 미코딩만</label>
+        </div>
+        <div class="unit-list" id="unitList"></div>
+        <div class="panel-foot">
+          <button id="doneBtn" class="primary"></button>
+          <button id="exportMine">내 코딩 CSV</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 비교 -->
+  <section id="tab-compare" class="tab">
+    <div id="compareBody" class="pad"></div>
+  </section>
+
+  <!-- 통계 -->
+  <section id="tab-stats" class="tab">
+    <div id="statsBody" class="pad"></div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="tab-settings" class="tab">
+    <div id="settingsBody" class="pad"></div>
+  </section>
+</main>
+
+<div id="gate" class="gate hidden">
+  <div class="gate-card">
+    <h2>접근 키가 필요합니다</h2>
+    <p>조원에게 받은 링크로 들어오세요. 링크 끝의 <code>#k=…</code> 부분이 키입니다.</p>
+    <input id="gateKey" placeholder="키 붙여넣기">
+    <button id="gateGo" class="primary">들어가기</button>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules
+.vercel
+# 교과서 원본·쪽 이미지는 절대 저장소에 넣지 않습니다 (저작권)
+*.pdf
+*.webp
+*.jpg
+*.png
+private/
