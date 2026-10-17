@@ -51,7 +51,7 @@ const S = {
   key: '', cfg: null, cfgEtag: null,
   metas: {}, book: null, units: [], unitsEtag: null, dirty: new Set(), deleted: new Set(),
   mine: { done: false, items: {} }, mineEtag: null,
-  coder: '', page: 0, sel: null, edit: false, zoom: 1,
+  coder: '', page: 0, sel: null, multi: new Set(), edit: false, draw: false, zoom: 1,
   imgCache: new Map(),
 };
 const $ = (s, r = document) => r.querySelector(s);
@@ -125,7 +125,29 @@ async function pageImage(bookId, file) {
 // ───────── 분석틀 도우미 ─────────
 const fw = () => S.cfg.frameworks[S.cfg.activeFramework] || [];
 const codeInfo = (code) => fw().find((c) => c.code === code);
-const stageKey = (code) => { const c = codeInfo(code); return c ? c.stage : (code ? '?' : ''); };
+const stageKey = (code) => {
+  const c = codeInfo(code); if (c) return c.stage;
+  if (/^[A-Z]$/.test(code || '')) { const s = fw().find((x) => x.code[0] === code); if (s) return s.stage; } // 단계만 고른 코드
+  return code ? '?' : '';
+};
+// 교육과정용: 기본 코드 목록 (+ 단계만)
+function basicCodes() {
+  const out = [];
+  fw().forEach((c) => {
+    const b = basicCode(c.code);
+    let o = out.find((x) => x.code === b);
+    if (!o) out.push(o = { stage: c.stage, code: b, names: [], descs: [] });
+    o.names.push(c.name); if (c.desc) o.descs.push(c.desc);
+  });
+  return out.map((o) => ({ stage: o.stage, code: o.code, name: o.names.join('/'), desc: o.descs.join(' / ') }));
+}
+function codeList() {
+  if (!isCur()) return fw();
+  const list = basicCodes(), stages = [];
+  list.forEach((c) => { if (!stages.includes(c.stage)) stages.push(c.stage); });
+  const extra = stages.filter((st) => /^[PCAIF]/.test(st) && st[0] !== 'X').map((st) => ({ stage: st, code: st[0], name: '단계만', desc: '하위 활동 없이 단계만 언급 (예: 분석하다)' }));
+  return stages.flatMap((st) => [...extra.filter((e) => e.stage === st), ...list.filter((c) => c.stage === st)]);
+}
 const basicCode = (code) => (code || '').replace(/[a-z]+$/, '');
 function levelOf(code, level) {
   if (!code) return '';
@@ -142,6 +164,13 @@ const stageColor = (code) => {
   const ch = (stageKey(code) || code || 'X')[0];
   return { P: 'var(--P)', F: 'var(--P)', C: 'var(--C)', A: 'var(--A)', I: 'var(--I)' }[ch] || 'var(--X)';
 };
+const isCur = (id = S.book) => (S.metas[id] || {}).type === 'curriculum';
+function where(bookId, u) {
+  const m = S.metas[bookId];
+  if (!m) return '';
+  if (m.type === 'curriculum') return `${u.std || ''} ${u.task || ''}`.trim();
+  return m.pages[u.page] ? m.pages[u.page].label + '쪽' : '';
+}
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
 // ───────── 시작 ─────────
@@ -173,6 +202,7 @@ async function init() {
     S.cfgEtag = r.etag || null;
   }
   await loadMetas();
+  await seedCurriculum();
   fillHeader();
   bindTabs();
   bindCoding();
@@ -181,6 +211,21 @@ async function init() {
   saveState('');
 }
 
+// 2022 교육과정(공개 문서) 의미 단위를 처음 한 번 등록
+async function seedCurriculum() {
+  if (S.cfg.books.includes('C2022')) return;
+  try {
+    const { meta, units } = await (await fetch('/curriculum_2022.json')).json();
+    const cur = await getStore('books/C2022/meta.json');
+    if (!cur.data) {
+      await putStore('books/C2022/meta.json', meta, null);
+      await putStore('books/C2022/units.json', { units }, null);
+    }
+    const next = { ...S.cfg, books: [...S.cfg.books, 'C2022'] };
+    const r = await putStore('config/app.json', next, S.cfgEtag);
+    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; S.metas.C2022 = cur.data || meta; }
+  } catch (e) { console.warn('교육과정 등록 실패', e); }
+}
 async function loadMetas() {
   const rs = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/meta.json`)));
   S.cfg.books.forEach((id, i) => { if (rs[i].data) S.metas[id] = rs[i].data; });
@@ -231,17 +276,35 @@ async function loadMine() {
 }
 
 function sortUnits() {
+  if (isCur()) return;
   S.units.sort((a, b) => a.page - b.page || Math.round(a.r[1] * 200) - Math.round(b.r[1] * 200) || a.r[0] - b.r[0] || (a.t || 0) - (b.t || 0));
 }
 const unitNo = (u) => S.units.indexOf(u) + 1;
 const unitById = (id) => S.units.find((u) => u.id === id);
 
 // ───────── 코딩 화면 ─────────
-function renderAll() { renderPages(); renderPage(); renderPanel(); renderList(); renderDone(); }
+function renderAll() {
+  const cur = isCur();
+  document.querySelector('.code-layout').classList.toggle('cur', cur);
+  renderPages(); renderPage(); renderCur(); renderPanel(); renderList(); renderDone();
+}
+function renderCur() {
+  const V = $('#curView');
+  if (!isCur()) { V.classList.add('hidden'); return; }
+  V.classList.remove('hidden');
+  const groups = [];
+  S.units.forEach((u) => { let g = groups.find((x) => x.std === u.std); if (!g) groups.push(g = { std: u.std, list: [] }); g.list.push(u); });
+  V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
+    groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
+      const it = S.mine.items[u.id] || {};
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || '·')}</span></div>`;
+    }).join('')}</div>`).join('');
+  V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
+}
 
 function renderPages() {
   const m = S.metas[S.book];
-  if (!m) { $('#pageList').innerHTML = ''; return; }
+  if (!m || !m.pages) { $('#pageList').innerHTML = ''; return; }
   $('#pageList').innerHTML = m.pages.map((p, i) => {
     const us = S.units.filter((u) => u.page === i);
     const todo = us.filter((u) => isRequired(u) && !(S.mine.items[u.id] || {}).code).length;
@@ -251,7 +314,7 @@ function renderPages() {
 }
 
 function goPage(i) {
-  const m = S.metas[S.book]; if (!m) return;
+  const m = S.metas[S.book]; if (!m || !m.pages || !m.pages.length) return;
   S.page = Math.max(0, Math.min(m.pages.length - 1, i));
   ls.set('page:' + S.book, S.page);
   renderPages(); renderPage();
@@ -259,15 +322,18 @@ function goPage(i) {
 
 async function renderPage() {
   const m = S.metas[S.book];
-  const has = m && m.pages.length;
-  $('#noPage').classList.toggle('hidden', !!has);
+  const has = m && m.pages && m.pages.length;
+  $('.vtool').classList.toggle('hidden', isCur());
+  $('#stageWrap').classList.toggle('hidden', isCur());
+  $('#noPage').classList.toggle('hidden', !!has || isCur());
   $('#stage').classList.toggle('hidden', !has);
   if (!has) { $('#pageLabel').textContent = ''; return; }
   const p = m.pages[S.page];
   $('#pageLabel').textContent = `${p.label}쪽 (${S.page + 1}/${m.pages.length})`;
   const wrapW = $('#stageWrap').clientWidth - 28;
   $('#stage').style.width = Math.round(Math.min(wrapW, 1000) * S.zoom) + 'px';
-  $('#stage').classList.toggle('editing', S.edit);
+  $('#stage').classList.toggle('editing', S.edit || S.draw);
+  $('#addBox').classList.toggle('primary', S.draw);
   $('#zoomLabel').textContent = Math.round(S.zoom * 100) + '%';
   renderBoxes();
   const want = S.page, wantBook = S.book;
@@ -286,29 +352,43 @@ function boxLabel(u) {
 }
 
 function renderBoxes() {
+  if (isCur()) { $('#boxes').innerHTML = ''; return; }
   const onPage = S.units.filter((u) => u.page === S.page);
   const html = onPage.map((u, i) => {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', it.code ? 'coded' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel ? 'sel' : ''].join(' ');
+    const cls = ['box', it.code ? 'coded' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
     const [x, y, w, h] = u.r;
     return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"><span class="tag" style="right:${shift * 46}px">${esc(boxLabel(u))}</span><span class="handle"></span></div>`;
   }).join('');
   $('#boxes').innerHTML = html;
 }
 
+function pick(id, shift) {
+  if (shift && S.sel) {
+    if (S.multi.size === 0) S.multi.add(S.sel);
+    S.multi.has(id) ? S.multi.delete(id) : S.multi.add(id);
+    if (!S.multi.size) S.multi.add(id);
+    S.sel = S.multi.has(id) ? id : [...S.multi][0];
+    renderBoxes(); renderPanel(); renderList(); renderCur();
+    return;
+  }
+  select(id);
+}
 function select(id, scroll = true) {
-  S.sel = id;
+  S.sel = id; S.multi = new Set(id ? [id] : []);
   const u = unitById(id);
   if (u && u.page !== S.page) { S.page = u.page; ls.set('page:' + S.book, S.page); renderPages(); renderPage(); }
   else renderBoxes();
-  renderPanel(); renderList();
+  renderPanel(); renderList(); renderCur();
   if (scroll && u) {
     const el = $(`.box[data-id="${id}"]`);
     if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     const row = $(`.unit-list .row[data-id="${id}"]`);
     if (row) row.scrollIntoView({ block: 'nearest' });
+    const cr = $(`#curView .crow[data-id="${id}"]`);
+    if (cr) cr.scrollIntoView({ block: 'nearest' });
   }
 }
 function step(d) {
@@ -328,11 +408,22 @@ function renderPanel() {
       <b>단축키</b> ↓ 또는 J: 다음 단위 · ↑ 또는 K: 이전 단위${S.edit ? ' · Delete: 박스 삭제' : ''}</p>`;
     return;
   }
+  if (S.multi.size > 1) {
+    const sel = S.units.filter((x) => S.multi.has(x.id));
+    P.innerHTML = `<div class="u-head"><span class="num">${sel.length}개 선택</span><span class="nav"><button id="mClear">선택 해제</button></span></div>
+      <p class="hint">순차적인 하위 문항처럼 하나의 과제로 셀 것들을 합칩니다. 첫 번째(#${unitNo(sel[0])})가 남고 나머지는 지워지며, 지워지는 단위에 입력된 코드도 함께 사라집니다.</p>
+      <ul class="msel">${sel.map((x) => `<li>#${unitNo(x)} ${esc(where(S.book, x))} · ${esc(x.summary || x.task)}</li>`).join('')}</ul>
+      <div class="unit-tools"><button id="mMerge" class="primary">하나로 합치기</button><button id="mDel" class="danger">모두 삭제</button></div>`;
+    $('#mClear').onclick = () => { S.multi = new Set([S.sel]); renderAll(); };
+    $('#mMerge').onclick = () => mergeUnits(sel);
+    $('#mDel').onclick = () => deleteUnits(sel);
+    return;
+  }
   const it = S.mine.items[u.id] || {};
   const m = S.metas[S.book];
   if (P.dataset.uid !== u.id) { P.scrollTop = 0; P.dataset.uid = u.id; }
   const stages = [];
-  fw().forEach((c) => { let s = stages.find((x) => x.stage === c.stage); if (!s) stages.push(s = { stage: c.stage, codes: [] }); s.codes.push(c); });
+  codeList().forEach((c) => { let s = stages.find((x) => x.stage === c.stage); if (!s) stages.push(s = { stage: c.stage, codes: [] }); s.codes.push(c); });
   const opt = (list, v) => ['', ...list].map((x) => `<option ${x === (v || '') ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('');
   const canCode = !!S.coder;
 
@@ -340,17 +431,27 @@ function renderPanel() {
     <div class="u-head">
       <span class="num">#${unitNo(u)}</span>
       <span class="kind ${u.kind === 'main' || !u.kind ? 'main' : ''}">${KINDS[u.kind || 'main']}</span>
-      <span class="hint">${esc(m.pages[u.page].label)}쪽${u.src && u.src !== 'claude' ? ' · ' + esc(u.src) + ' 추가' : ''}</span>
+      <span class="hint">${esc(where(S.book, u))}${u.src && u.src !== 'claude' ? ' · ' + esc(u.src) + ' 추가' : ''}</span>
       <span class="nav"><button id="uPrev" title="이전 (↑)">↑</button><button id="uNext" title="다음 (↓)">↓</button></span>
     </div>
-    <div class="meta-grid">
+    ${isCur() ? `<div class="meta-grid">
+      <label>성취기준</label><select data-f="std">${opt([...S.cfg.stdList.filter((x) => x !== '기타'), '공통'], u.std)}</select>
+      <label>출처</label><select data-f="task">${opt(['성취기준', '해설', '고려 사항'], u.task)}</select>
+      <label>의미 단위</label><textarea data-f="summary" rows="2">${esc(u.summary)}</textarea>
+    </div>
+    ${u.orig ? `<div class="meta-ro">원문: ${esc(u.orig)}</div>` : ''}` : `<div class="meta-grid">
       <label>유형</label><select data-f="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === (u.kind || 'main') ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <label>발문 요약</label><input data-f="summary" value="${esc(u.summary)}">
       <label>과제 번호</label><input data-f="task" value="${esc(u.task)}">
       <label>위치</label><select data-f="pos">${opt(S.cfg.positions, u.pos)}</select>
       <label>성취기준</label><select data-f="std">${opt(S.cfg.stdList, u.std)}</select>
+    </div>`}
+    <div class="unit-tools">
+      <button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button>
+      ${isCur() ? '<button id="uAdd">아래에 문장 추가</button>' : ''}
+      <button id="uDel" class="danger">${isCur() ? '문장' : '박스'} 삭제</button>
+      <span class="hint">Shift+클릭으로 여러 개 골라 합치기</span>
     </div>
-    ${S.edit ? `<div style="display:flex;gap:6px;margin:-4px 0 10px"><button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button><button id="uDel" class="danger">박스 삭제</button></div>` : ''}
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
     ${!isRequired(u) ? '<p class="hint">이 유형은 코드 입력이 선택 사항입니다.</p>' : ''}
     ${stages.map((s) => `<div class="stage-row"><div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage)}</div>
@@ -364,11 +465,13 @@ function renderPanel() {
   $('#uPrev').onclick = () => step(-1);
   $('#uNext').onclick = () => step(1);
   P.querySelectorAll('[data-f]').forEach((el) => el.onchange = () => {
+    if (isCur() && el.dataset.f === 'summary') { u.summary = el.value; markDirty(u); renderCur(); renderList(); return; }
     u[el.dataset.f] = el.value; markDirty(u);
     if (el.dataset.f === 'kind') { renderBoxes(); renderPanel(); }
     renderList();
   });
-  if (S.edit) { $('#uSplit').onclick = () => splitUnit(u); $('#uDel').onclick = () => deleteUnit(u); }
+  $('#uSplit').onclick = () => splitUnit(u); $('#uDel').onclick = () => deleteUnit(u);
+  if ($('#uAdd')) $('#uAdd').onclick = () => addCurUnit(u);
   if (!canCode) return;
   P.querySelectorAll('[data-code]').forEach((b) => {
     b.onclick = () => setItem(u.id, { code: it.code === b.dataset.code ? '' : b.dataset.code });
@@ -391,12 +494,12 @@ function renderList() {
   $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
-    return `<div class="row ${u.id === S.sel ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
-      <span>#${unitNo(u)}</span><span>${esc(m ? m.pages[u.page].label : '')}쪽</span>
+    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
+      <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
       <span class="c" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || (isRequired(u) ? '·' : ''))}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
-  $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) select(r.dataset.id); };
+  $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
 
 function renderDone() {
@@ -451,13 +554,46 @@ async function saveUnits(retry = true) {
 }
 const newId = () => 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function splitUnit(u) {
-  const n = { ...u, id: newId(), r: [u.r[0] + 0.012, u.r[1], u.r[2], u.r[3]], src: S.coder || '?', t: Date.now(), task: u.task ? u.task + '-2' : '', summary: u.summary };
-  S.units.push(n); sortUnits(); markDirty(n); select(n.id);
+  const n = { ...u, id: newId(), r: u.r ? [u.r[0] + 0.012, u.r[1], u.r[2], u.r[3]] : null, src: S.coder || '?', t: Date.now(), task: isCur() ? u.task : (u.task ? u.task + '-2' : ''), summary: u.summary };
+  if (isCur()) S.units.splice(S.units.indexOf(u) + 1, 0, n); else { S.units.push(n); sortUnits(); }
+  markDirty(n); select(n.id);
   toast('같은 자리에 행을 하나 더 만들었습니다. 발문 요약을 행동별로 고쳐 주세요.');
 }
+function mergeUnits(sel) {
+  if (sel.length < 2) return;
+  if (!confirm(`${sel.length}개를 #${unitNo(sel[0])} 하나로 합칠까요?\n나머지 단위에 입력된 코드는 사라집니다.`)) return;
+  const [keep, ...rest] = sel;
+  const samePage = rest.filter((x) => x.page === keep.page && x.r && keep.r);
+  if (keep.r && samePage.length) {
+    const all = [keep, ...samePage];
+    const l = Math.min(...all.map((x) => x.r[0])), t = Math.min(...all.map((x) => x.r[1]));
+    const r = Math.max(...all.map((x) => x.r[0] + x.r[2])), b = Math.max(...all.map((x) => x.r[1] + x.r[3]));
+    keep.r = [l, t, r - l, b - t];
+  }
+  const uniq = (arr) => arr.filter((v, i) => v && arr.indexOf(v) === i);
+  if (!isCur()) keep.task = uniq(sel.map((x) => x.task)).join(' + ');
+  keep.summary = uniq(sel.map((x) => x.summary)).join(isCur() ? ' ' : ' → ');
+  if (isCur()) keep.orig = uniq(sel.map((x) => x.orig)).join(' ');
+  rest.forEach((x) => { S.deleted.add(x.id); S.dirty.delete(x.id); });
+  S.units = S.units.filter((x) => !rest.includes(x));
+  markDirty(keep); select(keep.id); renderPages();
+  toast(`#${unitNo(keep)} 하나로 합쳤습니다${rest.some((x) => x.page !== keep.page) ? ' (다른 쪽 박스는 첫 박스로 대표)' : ''}.`);
+}
+function deleteUnits(sel) {
+  if (!confirm(`${sel.length}개를 삭제할까요? 모든 조원의 코딩에서 빠집니다.`)) return;
+  sel.forEach((x) => { S.deleted.add(x.id); S.dirty.delete(x.id); });
+  S.units = S.units.filter((x) => !sel.includes(x)); S.sel = null; S.multi = new Set();
+  saveState('박스 저장 대기…'); clearTimeout(unitTimer); unitTimer = setTimeout(saveUnits, 300);
+  renderAll();
+}
+function addCurUnit(after) {
+  const n = { id: newId(), page: 0, r: null, kind: 'main', std: after.std, task: after.task, summary: '', orig: '', src: S.coder || '?', t: (after.t || 0) + 1, pos: '' };
+  S.units.splice(S.units.indexOf(after) + 1, 0, n); markDirty(n); select(n.id);
+  setTimeout(() => { const i = $('#unitPanel [data-f="summary"]'); if (i) i.focus(); }, 0);
+}
 function deleteUnit(u) {
-  if (!confirm(`#${unitNo(u)} 박스를 삭제할까요? 모든 조원의 코딩에서 이 단위가 빠집니다.`)) return;
-  S.units = S.units.filter((x) => x !== u); S.deleted.add(u.id); S.dirty.delete(u.id); S.sel = null;
+  if (!confirm(`#${unitNo(u)} ${isCur() ? '문장' : '박스'}을(를) 삭제할까요? 모든 조원의 코딩에서 이 단위가 빠집니다.`)) return;
+  S.units = S.units.filter((x) => x !== u); S.deleted.add(u.id); S.dirty.delete(u.id); S.sel = null; S.multi = new Set();
   saveState('박스 저장 대기…'); clearTimeout(unitTimer); unitTimer = setTimeout(saveUnits, 300);
   renderAll();
 }
@@ -468,7 +604,8 @@ function bindCoding() {
   $('#nextPage').onclick = () => goPage(S.page + 1);
   $('#zoomIn').onclick = () => { S.zoom = Math.min(2.5, S.zoom + 0.15); renderPage(); };
   $('#zoomOut').onclick = () => { S.zoom = Math.max(0.5, S.zoom - 0.15); renderPage(); };
-  $('#editMode').onchange = (e) => { S.edit = e.target.checked; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
+  $('#editMode').onchange = (e) => { S.edit = e.target.checked; S.draw = false; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
+  $('#addBox').onclick = () => { S.draw = !S.draw; renderPage(); if (S.draw) toast('쪽 이미지에서 끌어서 새 박스를 그리세요'); };
   $('#onlyTodo').onchange = renderList;
   $('#doneBtn').onclick = async () => {
     if (!S.mine.done) {
@@ -488,7 +625,11 @@ function bindCoding() {
     else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); step(-1); }
     else if (e.key === 'ArrowRight') goPage(S.page + 1);
     else if (e.key === 'ArrowLeft') goPage(S.page - 1);
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && S.edit && S.sel) { e.preventDefault(); deleteUnit(unitById(S.sel)); }
+    else if (e.key === 'Escape') { S.draw = false; S.multi = new Set(S.sel ? [S.sel] : []); renderAll(); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel) {
+      e.preventDefault();
+      if (S.multi.size > 1) deleteUnits(S.units.filter((x) => S.multi.has(x.id))); else deleteUnit(unitById(S.sel));
+    }
   });
 
   const stage = $('#stage');
@@ -498,10 +639,16 @@ function bindCoding() {
 
   stage.addEventListener('mousedown', (e) => {
     const boxEl = e.target.closest('.box:not(.drawing)');
-    if (!S.edit) { if (boxEl) select(boxEl.dataset.id, false); return; }
     e.preventDefault();
+    if (!S.edit && !S.draw) {
+      // 끌면 화면 이동, 그냥 누르면 박스 선택
+      const w = $('#stageWrap');
+      drag = { mode: 'pan', cx: e.clientX, cy: e.clientY, sl: w.scrollLeft, st: w.scrollTop, moved: false, boxId: boxEl && boxEl.dataset.id, shift: e.shiftKey };
+      stage.classList.add('panning');
+      return;
+    }
     const [x, y] = rel(e);
-    if (boxEl) {
+    if (boxEl && !S.draw) {
       const u = unitById(boxEl.dataset.id);
       if (S.sel !== u.id) select(u.id, false);
       drag = { mode: e.target.classList.contains('handle') ? 'resize' : 'move', u, x0: x, y0: y, r0: [...u.r], moved: false };
@@ -513,6 +660,12 @@ function bindCoding() {
   });
   window.addEventListener('mousemove', (e) => {
     if (!drag) return;
+    if (drag.mode === 'pan') {
+      const dx = e.clientX - drag.cx, dy = e.clientY - drag.cy;
+      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+      const w = $('#stageWrap'); w.scrollLeft = drag.sl - dx; w.scrollTop = drag.st - dy;
+      return;
+    }
     const [x, y] = rel(e);
     if (drag.mode === 'draw') {
       const l = clamp(Math.min(x, drag.x0)), t = clamp(Math.min(y, drag.y0));
@@ -529,7 +682,9 @@ function bindCoding() {
   window.addEventListener('mouseup', (e) => {
     if (!drag) return;
     const d = drag; drag = null;
+    if (d.mode === 'pan') { stage.classList.remove('panning'); if (!d.moved && d.boxId) pick(d.boxId, d.shift); return; }
     if (d.mode === 'draw') {
+      S.draw = false; $('#stage').classList.toggle('editing', S.edit); $('#addBox').classList.remove('primary');
       $('#drawBox').classList.add('hidden');
       const [x, y] = rel(e);
       const l = clamp(Math.min(x, d.x0)), t = clamp(Math.min(y, d.y0)), w = clamp(Math.max(x, d.x0)) - l, h = clamp(Math.max(y, d.y0)) - t;
@@ -550,7 +705,7 @@ function exportCSV(bookId, coderLabel, items, filename, kinds = null) {
   units.forEach((u) => {
     if (kinds && !kinds.includes(u.kind || 'main')) return;
     const it = items[u.id] || {};
-    rows.push([bookId, m ? m.pages[u.page].label : '', u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', coderLabel, it.memo, KINDS[u.kind || 'main'], u.id]);
+    rows.push([bookId, where(bookId, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', coderLabel, it.memo, KINDS[u.kind || 'main'], u.id]);
   });
   download(filename, toCSV(rows));
 }
@@ -648,7 +803,7 @@ async function renderCompare() {
   });
   const shown = CMP.onlyDis ? disRows.filter((x) => x.dis) : disRows;
   const fin = finalState.data.items || {};
-  const codeOpts = (v) => ['', ...fw().map((c) => c.code)].map((c) => `<option ${c === v ? 'selected' : ''} value="${esc(c)}">${esc(c || '—')}</option>`).join('');
+  const codeOpts = (v) => ['', ...codeList().map((c) => c.code)].map((c) => `<option ${c === v ? 'selected' : ''} value="${esc(c)}">${esc(c || '—')}</option>`).join('');
   const m = S.metas[S.book];
   const finDone = units.filter((u) => (fin[u.id] || {}).code).length;
 
@@ -673,12 +828,12 @@ async function renderCompare() {
       <button id="exportFinal">최종 코드 CSV</button>
       <button id="exportAll">세 명 코딩 CSV</button>
     </div>
-    <table class="t" id="cmpTable"><tr><th>#</th><th>쪽</th><th class="l">발문 요약</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th>최종</th><th>비판·소통(최종)</th><th class="l">메모</th></tr>
+    <table class="t" id="cmpTable"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th>최종</th><th>비판·소통(최종)</th><th class="l">메모</th></tr>
       ${shown.map(({ u, codes, dis }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
         const cc = coders.map((c) => { const it = items(c)[u.id] || {}; return `<td><b style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || '—')}</b>${it.crit ? ' <span class="hint">비</span>' : ''}${it.comm ? ' <span class="hint">소</span>' : ''}</td>`; }).join('');
-        return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(m.pages[u.page].label)}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
+        return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
           <td class="fin"><select data-fin="${u.id}">${codeOpts(f.code || '')}</select>${!f.code && majority(codes) ? ` <span class="hint">다수 ${esc(majority(codes))}</span>` : ''}</td>
           <td class="fin"><label><input type="checkbox" data-fcrit="${u.id}" ${f.crit ? 'checked' : ''}>비</label> <label><input type="checkbox" data-fcomm="${u.id}" ${f.comm ? 'checked' : ''}>소</label></td>
           <td class="l hint">${memos}</td></tr>`;
@@ -725,7 +880,7 @@ async function renderCompare() {
     const rows = [head];
     [...coders, '최종'].forEach((c) => {
       const its = c === '최종' ? fin : items(c);
-      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, m.pages[u.page].label, u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', c, it.memo, KINDS[u.kind || 'main'], u.id]); });
+      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', c, it.memo, KINDS[u.kind || 'main'], u.id]); });
     });
     download(`${S.book}_세명코딩.csv`, toCSV(rows));
   };
@@ -767,6 +922,7 @@ async function renderStats() {
   const gname = (r) => ST.group === 'book' ? `${r.book} ${r.publisher}` : ST.group === 'period' ? `${r.period} 개정` : r.publisher;
   const groups = [...new Set(recs.map(gname))];
   const cats = categories(ST.level);
+  recs.forEach((r) => { const k = levelOf(r.it.code, ST.level); if (k && !cats.includes(k)) cats.push(k); });
   const count = (g, c) => recs.filter((r) => gname(r) === g && levelOf(r.it.code, ST.level) === c).length;
   const gTotal = (g) => recs.filter((r) => gname(r) === g).length;
 
@@ -810,6 +966,7 @@ async function renderStats() {
     <table class="t"><tr><th class="l">구분</th><th>단위 수</th><th>비판</th><th>소통</th></tr>
       ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); const c1 = rs.filter((r) => r.it.crit).length, c2 = rs.filter((r) => r.it.comm).length; return `<tr><td class="l">${esc(g)}</td><td>${rs.length}</td><td>${c1} <span class="hint">(${pct(c1 / rs.length)})</span></td><td>${c2} <span class="hint">(${pct(c2 / rs.length)})</span></td></tr>`; }).join('')}
     </table>
+    ${porterHtml(recs)}
     <div class="bar" style="margin-top:16px"><button id="stCsvA">빈도표 CSV</button><button id="stCsvRec">코딩 기록 CSV (선택한 교과서 전체)</button></div>`}
   `;
   $('#stSrc').onchange = (e) => { ST.source = e.target.value; renderStats(); };
@@ -821,11 +978,33 @@ async function renderStats() {
   $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
   $('#stCsvRec').onclick = () => {
     const rows = [['교과서ID', '쪽', '성취기준', '위치', '과제번호', '발문요약', '코드', '내용요소', '비판', '소통', '코더', '메모', '유형', '단위ID', '시기', '출판사']];
-    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, S.metas[book].pages[u.page].label, u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.id, period, publisher]));
+    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.crit ? 'O' : '', it.comm ? 'O' : '', ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.id, period, publisher]));
     download('코딩기록.csv', toCSV(rows));
   };
 }
 
+// Porter 정합성 지수: 같은 시기 교육과정 분포(x)와 교과서 분포(y), 1 - Σ|x−y|/2
+function porterHtml(recs) {
+  const lv = ST.level === 'fine' ? 'basic' : ST.level; // 교육과정은 기본 코드까지만 코딩
+  const curBooks = [...new Set(recs.filter((r) => isCur(r.book)).map((r) => r.book))];
+  if (!curBooks.length) return '';
+  const rows = [];
+  curBooks.forEach((cb) => {
+    const period = S.metas[cb].period;
+    const texts = [...new Set(recs.filter((r) => !isCur(r.book) && S.metas[r.book].period === period).map((r) => r.book))];
+    const dist = (book) => { const rs = recs.filter((r) => r.book === book), d = {}; rs.forEach((r) => { const k = levelOf(r.it.code, lv); d[k] = (d[k] || 0) + 1 / rs.length; }); return d; };
+    const x = dist(cb);
+    texts.forEach((tb) => {
+      const y = dist(tb), keys = new Set([...Object.keys(x), ...Object.keys(y)]);
+      let sum = 0; keys.forEach((k) => { sum += Math.abs((x[k] || 0) - (y[k] || 0)); });
+      rows.push([period, `${tb} ${S.metas[tb].publisher || ''}`, (1 - sum / 2).toFixed(3)]);
+    });
+  });
+  if (!rows.length) return `<h3>Porter 정합성 지수</h3><p class="note">같은 시기의 교과서도 함께 골라야 계산됩니다.</p>`;
+  return `<h3>Porter 정합성 지수 (${lv === 'stage' ? '단계' : '기본 코드'} 수준)</h3>
+    <table class="t"><tr><th>시기</th><th class="l">교과서</th><th>정합성 지수</th></tr>${rows.map((r) => `<tr><td>${esc(r[0])}</td><td class="l">${esc(r[1])}</td><td><b>${r[2]}</b></td></tr>`).join('')}</table>
+    <p class="note">1 − Σ|x−y|/2 (Porter, 2002). x는 교육과정, y는 교과서의 범주별 비율이며 1에 가까울수록 정합적입니다. '세부 코드'를 고르면 기본 코드 수준으로 계산합니다. 교육과정에서 '단계만' 고른 코드(A 등)는 기본 코드 수준에서 별도 범주로 셉니다.</p>`;
+}
 function barChart(cats, groups, val, palette) {
   const W = Math.max(520, cats.length * (groups.length * 18 + 26) + 60), H = 260, L = 44, T = 14, Bm = 40;
   const ih = H - T - Bm, cw = (W - L - 10) / cats.length, bw = Math.min(26, (cw - 12) / Math.max(1, groups.length));
@@ -888,8 +1067,13 @@ function renderSettings() {
     </table>
     <h3>교과서 묶음 올리기</h3>
     <p class="note">Claude가 만들어 준 교과서 묶음(.zip: 쪽 이미지 + 1차 박스)을 올립니다. 쪽 이미지는 저장소(GitHub)가 아닌 비공개 저장공간에만 보관됩니다.</p>
+    <div id="dropZone" class="dropzone">zip 파일을 여기에 끌어다 놓으세요</div>
     <div class="bar"><input type="file" id="pkgFile" accept=".zip"><button id="pkgGo" class="primary">올리기</button><span id="pkgMsg" class="hint"></span></div>`;
   $('#pkgGo').onclick = () => uploadPackage($('#pkgFile').files[0]);
+  const dz = $('#dropZone');
+  ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+  dz.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) uploadPackage(f); });
 
   $('#copyLink').onclick = () => { navigator.clipboard.writeText(link).then(() => toast('복사했습니다')); };
   $('#sSave').onclick = async () => {

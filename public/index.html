@@ -36,8 +36,9 @@
           <span id="pageLabel"></span>
           <button id="nextPage" title="다음 쪽">▶</button>
           <span class="sp"></span>
-          <label class="toggle"><input type="checkbox" id="editMode"> 박스 편집</label>
-          <span id="editHelp" class="hint hidden">빈 곳을 끌어서 새 박스 · 박스를 끌어서 이동 · 오른쪽 아래 모서리로 크기 조절 · Delete 키로 삭제</span>
+          <button id="addBox" title="쪽 이미지에서 끌어서 새 박스를 그립니다">+ 박스 추가</button>
+          <label class="toggle"><input type="checkbox" id="editMode"> 박스 이동·크기</label>
+          <span id="editHelp" class="hint hidden">박스를 끌어서 이동 · 오른쪽 아래 모서리로 크기 조절</span>
           <span class="sp"></span>
           <button id="zoomOut">−</button><span id="zoomLabel">100%</span><button id="zoomIn">+</button>
         </div>
@@ -49,6 +50,7 @@
           </div>
           <div id="noPage" class="empty hidden">이 교과서에는 아직 쪽 이미지가 없습니다.</div>
         </div>
+        <div id="curView" class="cur-view hidden"></div>
       </div>
       <aside class="panel">
         <div id="unitPanel"></div>
