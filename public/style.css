@@ -88,7 +88,8 @@ main { flex: 1; min-height: 0; }
 .codes button { padding: 3px 8px; font-size: 13px; }
 .codes button.on { color: #fff; font-weight: 600; }
 .codes button b { font-weight: 700; margin-right: 3px; }
-.code-desc { font-size: 12px; color: var(--muted); min-height: 18px; margin: 4px 0 8px; }
+.code-desc { font-size: 12.5px; color: var(--ink); margin: 6px 0 10px; padding: 8px 10px; background: #f6f5f1; border-radius: 6px; line-height: 1.55; }
+.code-desc .tip { color: var(--accent); margin-top: 3px; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
 .chips button { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
 .chips button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
@@ -165,3 +166,6 @@ table.t tr.dis td.fin { background: #fff; }
 .who-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .who-list button { font-size: 18px; padding: 14px; border-radius: 10px; font-weight: 600; }
 .who-list button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.tipbox { position: fixed; z-index: 70; max-width: 340px; background: var(--ink); color: #fff; font-size: 12.5px; line-height: 1.55; padding: 8px 11px; border-radius: 7px; box-shadow: 0 4px 14px rgba(0,0,0,.18); pointer-events: none; }
+.tipbox .tip { color: #a9c6ff; margin-top: 3px; }
