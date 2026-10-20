@@ -20,15 +20,15 @@ const FRAMEWORK_CSV = `후보,단계,코드,이름,학생이 하는 일
 우리초안,I 해석,I3,확인·평가,주어진 표현·주장·결론의 적절성 평가
 우리초안,I 해석,I4,새 질문,결과를 보고 새 질문 만들기
 우리초안,X 기타,X,해당 없음,본 과제이지만 어느 단계에도 해당하지 않음
-전혜원·김래영2019,F 문제설정,F1,문제의 파악,"자료를 수집하기 전에 자료를 수집하는 이유를 파악하며, 자료 수집과 자료 분석, 결과 해석의 동기를 유발할 수 있도록 문제를 파악한다."
-전혜원·김래영2019,F 문제설정,F2,문제의 설정,조사하고자 하는 주제에 맞는 문제를 설정한다.
-전혜원·김래영2019,P 자료 계획 및 수집,P1,자료 수집 계획,적합한 자료를 수집하기 위해 계획을 설계한다.
-전혜원·김래영2019,P 자료 계획 및 수집,P2,자료 수집 계획 이행,"자료를 수집하기 위해 설계한 계획대로 관찰, 측정, 설문 등을 통해 자료를 얻는 활동을 진행한다."
-전혜원·김래영2019,R 자료 표현 및 분석,R1,표현 도구 선정하기,"(R1.1) 표현 도구들을 이해하고 유용성을 인식한 후에 자료에 적합한 표현 도구를 선정한다. (R1.2) 선정한 표현 도구를 어떻게 표현해야 자료 집단의 특성을 효과적으로 드러낼 수 있는지 고려한다."
-전혜원·김래영2019,R 자료 표현 및 분석,R2,변환하기,자료를 선정한 표현 도구를 이용하여 변환한다.
-전혜원·김래영2019,R 자료 표현 및 분석,R3,분석,"(R3.1) 표현도구들에서 제목이나 축의 이름, 주어진 자료 이름 등과 같이 그래프에서 확실히 시각화된 자료를 명확히 관찰하는 것으로 한 눈에 바로 읽을 수 있는 정보를 읽을 수 있다. (R3.2) 국소적인 시각으로 표현된 자료들의 관계를 비교한다. 이 때 문맥에서 요소의 의미를 고려하지 않고 시각적인 것으로 해석한다. (R3.3) 표현된 값의 대부분 또는 전부를 종합하거나 통합해서 하나의 진술이나 관계로 분석한다."
-전혜원·김래영2019,I 결과 해석,I1,해석·추론,"자료 분석을 바탕으로 초기에 설정한 문제와 연관 지어서 해석한다. 자료에 내재되어 있는 의미로부터 추론하고 예측하여 자료 이면에 있는 정보를 추론한다."
-전혜원·김래영2019,I 결과 해석,I2,확인·평가,해석한 것을 확인하고 평가한다.
+전혜원·김래영2019,F 문제설정,F1,문제의 파악,문제 상황을 이해하고 무엇을 왜 알아볼지 파악,"자료를 수집하기 전에 자료를 수집하는 이유를 파악하며, 자료 수집과 자료 분석, 결과 해석의 동기를 유발할 수 있도록 문제를 파악한다."
+전혜원·김래영2019,F 문제설정,F2,문제의 설정,자료로 답할 수 있는 질문을 직접 정함,조사하고자 하는 주제에 맞는 문제를 설정한다.
+전혜원·김래영2019,P 자료 계획 및 수집,P1,자료 수집 계획,대상·인원·방법을 계획,적합한 자료를 수집하기 위해 계획을 설계한다.
+전혜원·김래영2019,P 자료 계획 및 수집,P2,자료 수집 계획 이행,계획대로 실제로 설문·측정·관찰,"자료를 수집하기 위해 설계한 계획대로 관찰, 측정, 설문 등을 통해 자료를 얻는 활동을 진행한다."
+전혜원·김래영2019,R 자료 표현 및 분석,R1,표현 도구 선정하기,알맞은 표·그래프를 고름,"(R1.1) 표현 도구들을 이해하고 유용성을 인식한 후에 자료에 적합한 표현 도구를 선정한다. (R1.2) 선정한 표현 도구를 어떻게 표현해야 자료 집단의 특성을 효과적으로 드러낼 수 있는지 고려한다."
+전혜원·김래영2019,R 자료 표현 및 분석,R2,변환하기,"표·그래프로 나타내기, 평균 등 값 구하기(계산 포함)",자료를 선정한 표현 도구를 이용하여 변환한다.
+전혜원·김래영2019,R 자료 표현 및 분석,R3,분석,"표현된 자료를 있는 그대로 읽기(값 읽기, 비교, 분포 특징)","(R3.1) 표현도구들에서 제목이나 축의 이름, 주어진 자료 이름 등과 같이 그래프에서 확실히 시각화된 자료를 명확히 관찰하는 것으로 한 눈에 바로 읽을 수 있는 정보를 읽을 수 있다. (R3.2) 국소적인 시각으로 표현된 자료들의 관계를 비교한다. 이 때 문맥에서 요소의 의미를 고려하지 않고 시각적인 것으로 해석한다. (R3.3) 표현된 값의 대부분 또는 전부를 종합하거나 통합해서 하나의 진술이나 관계로 분석한다."
+전혜원·김래영2019,I 결과 해석,I1,해석,"분석 결과를 원래 문제 상황과 연결해 결론 내리기, 추론·예측 포함","자료 분석을 바탕으로 초기에 설정한 문제와 연관 지어서 해석한다. 자료에 내재되어 있는 의미로부터 추론하고 예측하여 자료 이면에 있는 정보를 추론한다."
+전혜원·김래영2019,I 결과 해석,I2,확인·평가,"이미 나온 해석·주장·결론이 적절한지 따지기",해석한 것을 확인하고 평가한다.
 배혜진·이동환2016,F 문제 설정,F1,교사의 문제 제기,
 배혜진·이동환2016,F 문제 설정,F2,문제화,
 배혜진·이동환2016,C 자료 수집,C1,조사의 절차,
@@ -71,12 +71,32 @@ const VERB_TIPS = {
   I: '해석 관련이지만 하위 활동이 드러나지 않음', I1: '해석하다(탐구 문제·맥락과 연결), 의사결정하다·토론하다', I2: '예상하다·일반화하다', I3: '오류를 찾다, 비판적으로 판단하다',
   X: '인식하다, 태도를 갖다 (가치·태도)',
 };
+// 조 코딩 규칙(10/20)의 경계 규칙
+const JK_TIPS = {
+  F1: '무엇을 알아볼지 정하면 F, 자료를 어떻게 모을지 정하거나 모으면 P',
+  F2: '무엇을 알아볼지 정하면 F, 자료를 어떻게 모을지 정하거나 모으면 P',
+  P1: '무엇을 알아볼지 정하면 F, 자료를 어떻게 모을지 정하거나 모으면 P',
+  P2: '무엇을 알아볼지 정하면 F, 자료를 어떻게 모을지 정하거나 모으면 P',
+  R1: '고르면 R1, 그리거나 계산하면 R2. 둘 다 있으면 각각 코딩(행 나누기)',
+  R2: '고르면 R1, 그리거나 계산하면 R2. 둘 다 있으면 각각 코딩(행 나누기)',
+  R3: '표·그래프·분포의 특징을 물으면 R3, 그 특징을 근거로 집단·상황에 대한 질문에 답하면 I1. 예) "30회 이상인 학생은 어느 반이 더 많은가?" → R3',
+  I1: '특징을 근거로 집단·상황에 답하면 I1(예: "어느 반이 더 잘한다고 할 수 있는가?"). 학생이 결론을 내리면 I1, 이미 나온 결론을 따지면 I2',
+  I2: '학생이 결론을 내리면 I1, 이미 나온 결론을 따지면 I2. 표본의 대표성을 따지는 문항(예: "10명에게만 물은 결과를 믿을 수 있나?")도 I2',
+};
+const LIT_DESC = {
+  '통계·수학적 지식의 절차적 활용': '배운 지식으로 계산·그리기·읽기',
+  '비판적 평가': '주장·결론·그래프·자료를 따지기',
+  '의사소통': '설명·발표·토론이 활동의 중심일 때',
+  '해당 없음': '어느 소양에도 해당하지 않음',
+};
 function codeHelp(code) {
   const c = codeList().find((x) => x.code === code);
   if (!c) return '';
-  const ours = S.cfg.activeFramework === '우리초안';
-  const tip = ours ? (isCur() ? VERB_TIPS[code] : CODE_TIPS[code]) : '';
-  return `<b>${esc(c.code)} ${esc(c.name)}</b>${c.desc ? ' — ' + esc(c.desc) : ''}${tip ? `<div class="tip">${isCur() ? '동사' : '구분'}: ${esc(tip)}</div>` : ''}`;
+  const fwName = S.cfg.activeFramework;
+  const tip = fwName === '전혜원·김래영2019' ? JK_TIPS[code] : fwName === '우리초안' ? (isCur() ? VERB_TIPS[code] : CODE_TIPS[code]) : '';
+  return `<b>${esc(c.code)} ${esc(c.name)}</b>${c.desc ? ' — ' + esc(c.desc) : ''}`
+    + (c.def ? `<div class="def"><span>표 Ⅲ-1 하위 요소</span> ${esc(c.def)}</div>` : '')
+    + (tip ? `<div class="tip">구분: ${esc(tip)}</div>` : '');
 }
 const DEFAULT_CFG = () => ({
   coders: ['조상연', '이성식', '김형준'],
@@ -88,7 +108,7 @@ const DEFAULT_CFG = () => ({
   defaultKinds: ['main', 'intro', 'example'],
   litList: ['통계·수학적 지식의 절차적 활용', '비판적 평가', '의사소통', '해당 없음'],
   books: [],
-  v2: true,
+  v2: true, v3: true, v4: true,
 });
 
 // ───────── 상태 ─────────
@@ -133,15 +153,15 @@ function download(name, text) {
 }
 function parseFrameworks(text) {
   const out = {};
-  parseCSV(text).slice(1).forEach(([fw, stage, code, name, desc]) => {
+  parseCSV(text).slice(1).forEach(([fw, stage, code, name, desc, def]) => {
     if (!fw || !code) return;
-    (out[fw.trim()] ||= []).push({ stage: stage.trim(), code: code.trim(), name: (name || '').trim(), desc: (desc || '').trim() });
+    (out[fw.trim()] ||= []).push({ stage: stage.trim(), code: code.trim(), name: (name || '').trim(), desc: (desc || '').trim(), def: (def || '').trim() });
   });
   return out;
 }
 function frameworksToCSV(fws) {
-  const rows = [['후보', '단계', '코드', '이름', '학생이 하는 일']];
-  for (const [fw, list] of Object.entries(fws)) list.forEach((c) => rows.push([fw, c.stage, c.code, c.name, c.desc]));
+  const rows = [['후보', '단계', '코드', '이름', '학생이 하는 일', '원문 정의']];
+  for (const [fw, list] of Object.entries(fws)) list.forEach((c) => rows.push([fw, c.stage, c.code, c.name, c.desc, c.def || '']));
   return rows.map((r) => r.map(csvCell).join(',')).join('\n');
 }
 
@@ -240,7 +260,11 @@ function autoCE(u) {
   return CE_BY_STD[u.std] ? [CE_BY_STD[u.std]] : ['기타'];
 }
 const unitCE = (u) => (u && Array.isArray(u.ce) && u.ce.length ? u.ce : autoCE(u || {}));
-const isDone = (it) => !!(it && it.code && it.lit); // 필수 두 가지를 모두 고른 단위
+// 문제해결 코드는 여러 개 가능 (예전 기록의 code 하나도 읽음)
+const codesOf = (it) => (it && Array.isArray(it.codes) ? it.codes : it && it.code ? [it.code] : []);
+const codeStr = (it) => codesOf(it).join('·');
+const firstColor = (it) => (codesOf(it).length ? stageColor(codesOf(it)[0]) : 'var(--muted)');
+const isDone = (it) => !!(it && codesOf(it).length && it.lit); // 필수 두 가지를 모두 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
 // ───────── 시작 ─────────
@@ -278,6 +302,12 @@ async function init() {
     const fresh = DEFAULT_CFG();
     const next = { ...S.cfg, v2: true, activeFramework: '전혜원·김래영2019', defaultKinds: ['main', 'intro', 'example'], litList: fresh.litList,
       frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
+    const r = await putStore('config/app.json', next, S.cfgEtag);
+    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+  }
+  if (!S.cfg.v4) {
+    const fresh = DEFAULT_CFG();
+    const next = { ...S.cfg, v4: true, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
   }
@@ -443,7 +473,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || '·')}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${firstColor(it)}">${esc(codeStr(it) || '·')}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -494,7 +524,8 @@ async function renderPage() {
 function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
-  return `#${unitNo(u)}${k !== 'main' ? ' ' + KINDS[k] : ''}${it.code ? ' · ' + it.code : ''}`;
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${codesOf(it).length ? ' · ' + codeStr(it) : ''}`;
+  return `${unitNo(u)}${extra ? `<span class="tc">${esc(extra)}</span>` : ''}`;
 }
 
 function renderBoxes() {
@@ -504,11 +535,11 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : it.code || it.lit ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || it.lit ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
-    return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%;z-index:${z}"><span class="tag" style="right:${shift * 46}px">${esc(boxLabel(u))}</span><span class="handle"></span></div>`;
+    return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%;z-index:${z}"><span class="tag" style="margin-left:${shift * 24}px">${boxLabel(u)}</span><span class="handle"></span></div>`;
   }).join('');
   $('#boxes').innerHTML = html;
 }
@@ -584,7 +615,7 @@ function renderPanel() {
   const canCode = !!S.coder;
 
   const reqHere = isRequired(u);
-  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : it.code ? '② 통계적 소양을 골라 주세요' : it.lit ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
+  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요' : it.lit ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
   P.innerHTML = `
     <div class="u-head">
       <span class="num">#${unitNo(u)}</span>
@@ -617,14 +648,12 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    <div class="step"><span class="stepn ${it.code ? 'ok' : ''}">${it.code ? '✓' : '1'}</span>통계적 문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">이 유형은 선택</span>'}<span class="hint step-hint">마우스를 올리면 설명</span></div>
-    ${stages.map((s) => `<div class="stage-row"><div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage)}</div>
-      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${it.code === c.code ? 'on' : ''}" style="${it.code === c.code ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div></div>`).join('')}
-    ${it.code ? `<div class="code-desc">${codeHelp(it.code)}</div>` : ''}
-    <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">이 유형은 선택</span>'}<span class="hint step-hint">하나만</span></div>
-    <div class="chips lit">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-    <div class="step light">메모 <span class="opt">선택</span></div>
-    <textarea id="cMemo" rows="2" placeholder="판단 근거나 헷갈린 점 (비교할 때 조원에게 보여요)">${esc(it.memo)}</textarea>
+    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">여러 개 가능 · 올리면 설명</span></div>
+    <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
+      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
+    <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
+    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
+    <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점">${esc(it.memo)}</textarea>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
   `;
   P.querySelector('.meta-box').ontoggle = (e) => { S.metaOpen = e.target.open; };
@@ -646,7 +675,11 @@ function renderPanel() {
   if ($('#uAdd')) $('#uAdd').onclick = () => addCurUnit(u);
   if (!canCode) return;
   P.querySelectorAll('[data-code]').forEach((b) => {
-    b.onclick = () => setItem(u.id, { code: it.code === b.dataset.code ? '' : b.dataset.code });
+    b.onclick = () => {
+      const set = new Set(codesOf(it)); set.has(b.dataset.code) ? set.delete(b.dataset.code) : set.add(b.dataset.code);
+      const order = codeList().map((c) => c.code); const codes = [...set].sort((a, c) => order.indexOf(a) - order.indexOf(c));
+      setItem(u.id, { codes, code: codes[0] || '' });
+    };
     // 마우스를 올리면 버튼 바로 밑에 설명
     b.onmouseenter = () => {
       const t = $('#tip'), r = b.getBoundingClientRect();
@@ -673,7 +706,7 @@ function renderList() {
     return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${isDone(it) ? '✓ ' : ''}${esc(it.code || (isRequired(u) ? '·' : ''))}</span></div>`;
+      <span class="c" style="color:${firstColor(it)}">${isDone(it) ? '✓ ' : ''}${esc(codeStr(it) || (isRequired(u) ? '·' : ''))}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -878,12 +911,12 @@ function bindCoding() {
 function exportCSV(bookId, coderLabel, items, filename, kinds = null) {
   const m = S.metas[bookId];
   const units = bookId === S.book ? S.units : (exportCSV.cache[bookId] || []);
-  const head = ['교과서ID', '쪽', '성취기준', '위치', '과제번호', '발문요약', '코드', '내용요소', '소양', '코더', '메모', '유형', '단위ID'];
+  const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
   const rows = [head];
   units.forEach((u) => {
     if (kinds && !kinds.includes(u.kind || 'main')) return;
     const it = items[u.id] || {};
-    rows.push([bookId, where(bookId, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', coderLabel, it.memo, KINDS[u.kind || 'main'], u.id]);
+    rows.push([bookId, where(bookId, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), coderLabel, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]);
   });
   download(filename, toCSV(rows));
 }
@@ -954,68 +987,74 @@ async function renderCompare() {
   const units = S.units.filter((u) => CMP.kinds.includes(u.kind || 'main'));
   const items = (c) => (r.data[c] && r.data[c].items) || {};
   const lv = (code) => levelOf(code, CMP.level);
-
-  // 쌍별
+  const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
+  const sameSet = (a, b) => a.join('|') === b.join('|');
+  const cats = categories(CMP.level);
+  // 코드가 여러 개일 수 있어: (1) 완전 일치율 = 고른 코드 묶음이 똑같은 비율, (2) κ = 코드마다 '골랐다/안 골랐다' κ를 구해 평균
   const pairs = [];
   for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) {
-    const a = [], b = [], ca = [], cb = [], ma = [], mb = [];
-    units.forEach((u) => {
-      const x = items(coders[i])[u.id] || {}, y = items(coders[j])[u.id] || {};
-      if (x.code && y.code) { a.push(lv(x.code)); b.push(lv(y.code)); }
-      if (x.lit && y.lit) { ca.push(x.lit); cb.push(y.lit); }
-    });
-    pairs.push({ name: `${coders[i]} – ${coders[j]}`, code: cohen(a, b), lit: cohen(ca, cb) });
+    const both = units.filter((u) => codesOf(items(coders[i])[u.id]).length && codesOf(items(coders[j])[u.id]).length);
+    const A = both.map((u) => lvSet(items(coders[i])[u.id])), Bs = both.map((u) => lvSet(items(coders[j])[u.id]));
+    const po = both.length ? both.filter((_, k) => sameSet(A[k], Bs[k])).length / both.length : NaN;
+    const ks = cats.map((c) => cohen(A.map((x) => x.includes(c)), Bs.map((x) => x.includes(c))).k).filter((k) => !isNaN(k));
+    const ca = [], cb = [];
+    units.forEach((u) => { const x = items(coders[i])[u.id] || {}, y = items(coders[j])[u.id] || {}; if (x.lit && y.lit) { ca.push(x.lit); cb.push(y.lit); } });
+    pairs.push({ name: `${coders[i]} – ${coders[j]}`, code: { n: both.length, po, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN }, lit: cohen(ca, cb) });
   }
-  const triple = [], tLit = [];
-  units.forEach((u) => {
-    const its = coders.map((c) => items(c)[u.id] || {});
-    if (its.every((x) => x.code)) triple.push(its.map((x) => lv(x.code)));
-    if (its.every((x) => x.lit)) tLit.push(its.map((x) => x.lit));
-  });
-  const fl = fleiss(triple), flLit = fleiss(tLit);
+  const all3 = units.filter((u) => coders.every((c) => codesOf(items(c)[u.id]).length));
+  const sets3 = all3.map((u) => coders.map((c) => lvSet(items(c)[u.id])));
+  const flKs = cats.map((c) => fleiss(sets3.map((row) => row.map((x) => x.includes(c)))).k).filter((k) => !isNaN(k));
+  const fl = { n: all3.length, po: all3.length ? sets3.filter((row) => sameSet(row[0], row[1]) && sameSet(row[1], row[2])).length / all3.length : NaN, k: flKs.length ? flKs.reduce((a, b) => a + b, 0) / flKs.length : NaN };
+  const tLit = [];
+  units.forEach((u) => { const its = coders.map((c) => items(c)[u.id] || {}); if (its.every((x) => x.lit)) tLit.push(its.map((x) => x.lit)); });
+  const flLit = fleiss(tLit);
 
   const kindBoxes = Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${CMP.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ');
   const levelRadios = [['fine', '세부 코드'], ['basic', '기본 코드'], ['stage', '단계']].map(([k, v]) => `<label><input type="radio" name="lv" value="${k}" ${CMP.level === k ? 'checked' : ''}> ${v}</label>`).join(' ');
 
+  // 다수결 코드 묶음: 두 명 이상이 고른 코드
+  const majCodes = (its) => codeList().map((c) => c.code).filter((c) => its.filter((x) => codesOf(x).includes(c)).length >= 2);
   const disRows = units.map((u) => {
-    const codes = coders.map((c) => (items(c)[u.id] || {}).code || '');
-    const dis = new Set(codes.filter(Boolean).map(lv)).size > 1 || codes.some((c) => !c);
-    return { u, codes, dis };
+    const its = coders.map((c) => items(c)[u.id] || {});
+    const sets = its.map(lvSet);
+    const dis = sets.some((x) => !x.length) || !sets.every((x) => sameSet(x, sets[0]));
+    return { u, its, dis };
   });
   const shown = CMP.onlyDis ? disRows.filter((x) => x.dis) : disRows;
   const fin = finalState.data.items || {};
-  const codeOpts = (v) => ['', ...codeList().map((c) => c.code)].map((c) => `<option ${c === v ? 'selected' : ''} value="${esc(c)}">${esc(c || '—')}</option>`).join('');
+  const finChips = (id, f) => `<div class="fin-codes">${codeList().map((c) => `<button data-fc="${esc(c.code)}" data-fid="${id}" class="${codesOf(f).includes(c.code) ? 'on' : ''}" style="${codesOf(f).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}">${esc(c.code)}</button>`).join('')}</div>`;
   const m = S.metas[S.book];
-  const finDone = units.filter((u) => (fin[u.id] || {}).code).length;
+  const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
 
   B.innerHTML = `<h2>${esc(bookName(S.book))} — 비교·일치율</h2>
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div></div>
     <div class="cards">
-      <div class="card"><div class="k">세 명 모두 일치</div><div class="v">${pct(fl.po)}</div><div class="hint">세 명 모두 코딩한 ${fl.n}개 기준</div></div>
-      <div class="card"><div class="k">Fleiss' κ (세 명)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
+      <div class="card"><div class="k">세 명 코드 완전 일치</div><div class="v">${pct(fl.po)}</div><div class="hint">세 명 모두 코딩한 ${fl.n}개 기준</div></div>
+      <div class="card"><div class="k">Fleiss' κ (코드별 평균)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
       <div class="card"><div class="k">최종 코드 확정</div><div class="v">${finDone}/${units.length}</div></div>
     </div>
-    <table class="t"><tr><th class="l">쌍</th><th>단위 수</th><th>코드 일치율</th><th>Cohen's κ</th><th>소양 일치율</th><th>소양 κ</th></tr>
+    <table class="t"><tr><th class="l">쌍</th><th>단위 수</th><th>코드 완전 일치율</th><th>Cohen's κ (코드별 평균)</th><th>소양 일치율</th><th>소양 κ</th></tr>
       ${pairs.map((p) => `<tr><td class="l">${esc(p.name)}</td><td>${p.code.n}</td><td>${pct(p.code.po)}</td><td>${kfmt(p.code.k)} <span class="hint">${kappaWord(p.code.k)}</span></td><td>${pct(p.lit.po)}</td><td>${kfmt(p.lit.k)} <span class="hint">${kappaWord(p.lit.k)}</span></td></tr>`).join('')}
       <tr><td class="l"><b>세 명 (Fleiss)</b></td><td>${fl.n}</td><td>${pct(fl.po)}</td><td>${kfmt(fl.k)}</td><td>${pct(flLit.po)}</td><td>${kfmt(flLit.k)}</td></tr>
     </table>
-    <p class="note">일치율은 두 사람이 모두 입력한 단위만 셉니다(코드와 소양 각각). κ 해석 기준: Landis & Koch(1977). '단계' 수준은 현재 분석틀(${esc(S.cfg.activeFramework)})의 단계로 묶어 비교합니다.</p>
+    <p class="note">코드는 여러 개 고를 수 있어서, 완전 일치율은 고른 코드 묶음이 똑같은 단위의 비율이고, κ는 코드마다 '골랐다/안 골랐다'의 κ를 구해 평균한 값입니다. 두 사람이 모두 입력한 단위만 셉니다. κ 해석 기준: Landis & Koch(1977). '단계' 수준은 현재 분석틀(${esc(S.cfg.activeFramework)})의 단계로 묶어 비교합니다.</p>
 
     <h3>단위별 비교와 최종 코드</h3>
     <div class="bar">
       <label><input type="checkbox" id="onlyDis" ${CMP.onlyDis ? 'checked' : ''}> 불일치·미입력만 보기 (${disRows.filter((x) => x.dis).length}개)</label>
-      <button id="fillMaj">다수결로 빈 최종 코드 채우기</button>
+      <button id="fillMaj">다수결로 빈 최종 코드 채우기 (두 명 이상 고른 코드)</button>
       <button id="exportFinal">최종 코드 CSV</button>
       <button id="exportAll">세 명 코딩 CSV</button>
     </div>
     <table class="t" id="cmpTable"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th>최종 코드</th><th>최종 소양</th><th class="l">메모</th></tr>
-      ${shown.map(({ u, codes, dis }) => {
+      ${shown.map(({ u, its, dis }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
-        const cc = coders.map((c) => { const it = items(c)[u.id] || {}; return `<td><b style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || '—')}</b>${it.lit ? ` <span class="hint">${esc(litShort(it.lit))}</span>` : ''}</td>`; }).join('');
+        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${it.lit ? `<br><span class="hint">${esc(litShort(it.lit))}</span>` : ''}</td>`).join('');
+        const mj = majCodes(its);
         return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
-          <td class="fin"><select data-fin="${u.id}">${codeOpts(f.code || '')}</select>${!f.code && majority(codes) ? ` <span class="hint">다수 ${esc(majority(codes))}</span>` : ''}</td>
+          <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>
           <td class="fin"><select data-flit="${u.id}">${['', ...litList()].map((c) => `<option value="${esc(c)}" ${c === (f.lit || '') ? 'selected' : ''}>${esc(c ? litShort(c) : '—')}</option>`).join('')}</select></td>
           <td class="l hint">${memos}</td></tr>`;
       }).join('')}
@@ -1025,25 +1064,29 @@ async function renderCompare() {
   B.querySelectorAll('[name=lv]').forEach((el) => el.onchange = () => { CMP.level = el.value; renderCompare(); });
   $('#onlyDis').onchange = (e) => { CMP.onlyDis = e.target.checked; renderCompare(); };
   B.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.go); });
+  finalState.data.items ||= {};
   const setFin = (id, patch) => { finalState.data.items ||= {}; finalState.data.items[id] = { ...(finalState.data.items[id] || {}), ...patch }; scheduleFinal(); };
-  B.querySelectorAll('[data-fin]').forEach((el) => el.onchange = () => {
-    const id = el.dataset.fin, its = coders.map((c) => items(c)[id] || {});
-    const f = finalState.data.items[id] || {};
-    // 처음 정할 때 내용요소·비판·소통은 다수결로 함께 채움
-    const patch = { code: el.value };
-    if (f.lit === undefined) patch.lit = majority(its.map((x) => x.lit));
+  B.querySelectorAll('[data-fc]').forEach((el) => el.onclick = () => {
+    const id = el.dataset.fid, its = coders.map((c) => items(c)[id] || {});
+    const f = (finalState.data.items || {})[id] || {};
+    const set = new Set(codesOf(f)); set.has(el.dataset.fc) ? set.delete(el.dataset.fc) : set.add(el.dataset.fc);
+    const order = codeList().map((c) => c.code); const codes = [...set].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const patch = { codes, code: codes[0] || '' };
+    if (f.lit === undefined) patch.lit = majority(its.map((x) => x.lit)); // 처음 정할 때 소양은 다수결로 함께
     setFin(id, patch);
+    el.classList.toggle('on', codes.includes(el.dataset.fc));
+    el.style.cssText = codes.includes(el.dataset.fc) ? `background:${stageColor(el.dataset.fc)};border-color:${stageColor(el.dataset.fc)}` : '';
   });
   B.querySelectorAll('[data-flit]').forEach((el) => el.onchange = () => setFin(el.dataset.flit, { lit: el.value }));
   $('#fillMaj').onclick = () => {
     let n = 0;
     units.forEach((u) => {
-      if ((fin[u.id] || {}).code) return;
+      if (codesOf(fin[u.id]).length) return;
       const its = coders.map((c) => items(c)[u.id] || {});
-      const mj = majority(its.map((x) => x.code));
-      if (!mj) return;
+      const mj = majCodes(its);
+      if (!mj.length) return;
       finalState.data.items[u.id] = {
-        ...(finalState.data.items[u.id] || {}), code: mj,
+        ...(finalState.data.items[u.id] || {}), codes: mj, code: mj[0],
         lit: majority(its.map((x) => x.lit)),
       };
       n++;
@@ -1053,11 +1096,11 @@ async function renderCompare() {
   };
   $('#exportFinal').onclick = () => exportCSV(S.book, '최종', fin, `${S.book}_최종코드.csv`);
   $('#exportAll').onclick = () => {
-    const head = ['교과서ID', '쪽', '성취기준', '위치', '과제번호', '발문요약', '코드', '내용요소', '소양', '코더', '메모', '유형', '단위ID'];
+    const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
     const rows = [head];
     [...coders, '최종'].forEach((c) => {
       const its = c === '최종' ? fin : items(c);
-      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', c, it.memo, KINDS[u.kind || 'main'], u.id]); });
+      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), c, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]); });
     });
     download(`${S.book}_세명코딩.csv`, toCSV(rows));
   };
@@ -1092,27 +1135,30 @@ async function renderStats() {
     else if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
     units.forEach((u) => {
       if (!ST.kinds.includes(u.kind || 'main')) return;
-      const it = items[u.id]; if (!it || !it.code) return;
+      const it = items[u.id]; if (!it || !codesOf(it).length) return;
       recs.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it });
     });
   }
   const gname = (r) => ST.group === 'book' ? `${r.book} ${r.publisher}` : ST.group === 'period' ? `${r.period} 개정` : r.publisher;
   const groups = [...new Set(recs.map(gname))];
   const cats = categories(ST.level);
-  recs.forEach((r) => { const k = levelOf(r.it.code, ST.level); if (k && !cats.includes(k)) cats.push(k); });
-  const count = (g, c) => recs.filter((r) => gname(r) === g && levelOf(r.it.code, ST.level) === c).length;
-  const gTotal = (g) => recs.filter((r) => gname(r) === g).length;
+  // 코드가 여러 개인 단위는 같은 범주를 한 번만, 서로 다른 범주는 각각 센다
+  const crecs = [];
+  recs.forEach((r) => { [...new Set(codesOf(r.it).map((c) => levelOf(c, ST.level)))].forEach((k) => crecs.push({ ...r, k, ks: [...new Set(codesOf(r.it).map((c) => levelOf(c, 'stage')))] })); });
+  crecs.forEach((r) => { if (r.k && !cats.includes(r.k)) cats.push(r.k); });
+  const count = (g, c) => crecs.filter((r) => gname(r) === g && r.k === c).length;
+  const gTotal = (g) => crecs.filter((r) => gname(r) === g).length;
 
   const palette = ['#2456a6', '#c0662b', '#2f7d4f', '#8a4fb3', '#a38a16', '#3b8a9e', '#b3261e', '#555'];
   const chart = barChart(cats, groups, (g, c) => (gTotal(g) ? count(g, c) / gTotal(g) : 0), palette);
 
   const tableA = [['구분', ...cats.map((c) => c), '합계']];
   groups.forEach((g) => tableA.push([g, ...cats.map((c) => count(g, c)), gTotal(g)]));
-  const allRow = ['전체', ...cats.map((c) => recs.filter((r) => levelOf(r.it.code, ST.level) === c).length), recs.length];
+  const allRow = ['전체', ...cats.map((c) => crecs.filter((r) => r.k === c).length), crecs.length];
 
   const stageCats = categories('stage');
   const ces = S.cfg.contentElements;
-  const ceCount = (ce, c) => recs.filter((r) => unitCE(r.u).includes(ce) && levelOf(r.it.code, 'stage') === c).length;
+  const ceCount = (ce, c) => recs.filter((r) => unitCE(r.u).includes(ce) && codesOf(r.it).some((x) => levelOf(x, 'stage') === c)).length;
 
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
   B.innerHTML = `<h2>통계표</h2>
@@ -1131,12 +1177,13 @@ async function renderStats() {
     <h3>빈도표 — 개수 (비율)</h3>
     <table class="t"><tr>${tableA[0].map((h, i) => `<th class="${i ? '' : 'l'}">${esc(h)}</th>`).join('')}</tr>
       ${tableA.slice(1).map((r) => `<tr><td class="l">${esc(r[0])}</td>${r.slice(1, -1).map((v) => `<td>${v} <span class="hint">(${pct(v / r[r.length - 1])})</span></td>`).join('')}<td><b>${r[r.length - 1]}</b></td></tr>`).join('')}
-      <tr><td class="l"><b>전체</b></td>${allRow.slice(1, -1).map((v) => `<td><b>${v}</b> <span class="hint">(${pct(v / recs.length)})</span></td>`).join('')}<td><b>${recs.length}</b></td></tr>
+      <tr><td class="l"><b>전체</b></td>${allRow.slice(1, -1).map((v) => `<td><b>${v}</b> <span class="hint">(${pct(v / recs.length)})</span></td>`).join('')}<td><b>${crecs.length}</b></td></tr>
     </table>
+    <p class="note">한 단위에 서로 다른 범주의 코드가 여러 개면 각각 한 번씩 셉니다(합계 = 코드 수). 단위 수는 ${recs.length}개입니다.</p>
     <h3>내용 요소 × 단계</h3>
     <table class="t"><tr><th class="l">내용 요소</th>${stageCats.map((c) => `<th>${esc(c)}</th>`).join('')}<th>합계</th></tr>
       ${ces.map((ce) => { const row = stageCats.map((c) => ceCount(ce, c)); const s = row.reduce((a, b) => a + b, 0); return s ? `<tr><td class="l">${esc(ce)}</td>${row.map((v) => `<td>${v || ''}</td>`).join('')}<td><b>${s}</b></td></tr>` : ''; }).join('')}
-      <tr><td class="l hint">내용 요소 없음</td>${stageCats.map((c) => `<td>${recs.filter((r) => !unitCE(r.u).length && levelOf(r.it.code, 'stage') === c).length || ''}</td>`).join('')}<td>${recs.filter((r) => !unitCE(r.u).length).length}</td></tr>
+      <tr><td class="l hint">내용 요소 없음</td>${stageCats.map((c) => `<td>${recs.filter((r) => !unitCE(r.u).length && codesOf(r.it).some((x) => levelOf(x, 'stage') === c)).length || ''}</td>`).join('')}<td>${recs.filter((r) => !unitCE(r.u).length).length}</td></tr>
     </table>
     <p class="note">내용 요소는 박스의 발문 요약·성취기준으로 자동으로 정해집니다(박스 정보에서 고칠 수 있음). 여러 개인 단위는 각 요소에 한 번씩 셉니다.</p>
     <h3>통계적 소양</h3>
@@ -1145,8 +1192,8 @@ async function renderStats() {
     </table>
     <h3>통계적 문제해결 × 통계적 소양 (${ST.level === 'stage' ? '단계' : ST.level === 'basic' ? '기본 코드' : '세부 코드'})</h3>
     <table class="t"><tr><th class="l">문제해결 \ 소양</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th><th>합계</th></tr>
-      ${cats.map((c) => { const rs = recs.filter((r) => levelOf(r.it.code, ST.level) === c); if (!rs.length) return ''; return `<tr><td class="l">${esc(c)}</td>${litList().map((l) => { const n = rs.filter((r) => r.it.lit === l).length; return `<td>${n || ''}</td>`; }).join('')}<td>${rs.filter((r) => !r.it.lit).length || ''}</td><td><b>${rs.length}</b></td></tr>`; }).join('')}
-      <tr><td class="l"><b>합계</b></td>${litList().map((l) => `<td><b>${recs.filter((r) => r.it.lit === l).length}</b></td>`).join('')}<td><b>${recs.filter((r) => !r.it.lit).length}</b></td><td><b>${recs.length}</b></td></tr>
+      ${cats.map((c) => { const rs = crecs.filter((r) => r.k === c); if (!rs.length) return ''; return `<tr><td class="l">${esc(c)}</td>${litList().map((l) => { const n = rs.filter((r) => r.it.lit === l).length; return `<td>${n || ''}</td>`; }).join('')}<td>${rs.filter((r) => !r.it.lit).length || ''}</td><td><b>${rs.length}</b></td></tr>`; }).join('')}
+      <tr><td class="l"><b>합계</b></td>${litList().map((l) => `<td><b>${crecs.filter((r) => r.it.lit === l).length}</b></td>`).join('')}<td><b>${crecs.filter((r) => !r.it.lit).length}</b></td><td><b>${crecs.length}</b></td></tr>
     </table>
     <p class="note">위 '수준'과 '포함할 유형' 설정을 따릅니다. 교과서·시기를 나눠 보려면 위에서 교과서를 골라 보세요.</p>
     ${porterHtml(recs)}
@@ -1160,8 +1207,8 @@ async function renderStats() {
   if (!recs.length) return;
   $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
   $('#stCsvRec').onclick = () => {
-    const rows = [['교과서ID', '쪽', '성취기준', '위치', '과제번호', '발문요약', '코드', '내용요소', '소양', '코더', '메모', '유형', '단위ID', '시기', '출판사']];
-    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.id, period, publisher]));
+    const rows = [[...'교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID', '시기', '출판사']];
+    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id, period, publisher]));
     download('코딩기록.csv', toCSV(rows));
   };
 }
@@ -1175,7 +1222,7 @@ function porterHtml(recs) {
   curBooks.forEach((cb) => {
     const period = S.metas[cb].period;
     const texts = [...new Set(recs.filter((r) => !isCur(r.book) && S.metas[r.book].period === period).map((r) => r.book))];
-    const dist = (book) => { const rs = recs.filter((r) => r.book === book), d = {}; rs.forEach((r) => { const k = levelOf(r.it.code, lv); d[k] = (d[k] || 0) + 1 / rs.length; }); return d; };
+    const dist = (book) => { const rs = []; recs.filter((r) => r.book === book).forEach((r) => [...new Set(codesOf(r.it).map((c) => levelOf(c, lv)))].forEach((k) => rs.push(k))); const d = {}; rs.forEach((k) => { d[k] = (d[k] || 0) + 1 / rs.length; }); return d; };
     const x = dist(cb);
     texts.forEach((tb) => {
       const y = dist(tb), keys = new Set([...Object.keys(x), ...Object.keys(y)]);
