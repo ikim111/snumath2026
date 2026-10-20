@@ -384,22 +384,28 @@ async function loadMetas() {
 function bookLabel(id) {
   const m = S.metas[id] || {}, pg = S.prog[id];
   const name = isCur(id) ? bookName(id) : `${m.publisher || ''} ${m.title || id}`.trim();
+  if (pg && pg.total && pg.by) {
+    // 세 명 진행률: 조12 이0 김19✓ /19  (✓ = 코딩 완료 누름)
+    const who = S.cfg.coders.map((c) => { const b = pg.by[c] || { n: 0 }; const n = c === S.coder && pg.done != null ? pg.done : b.n; return `${c[0]}${n}${b.fin ? '✓' : ''}`; }).join(' ');
+    return `${name}  (${who} /${pg.total})`;
+  }
   return name + (pg && pg.total ? (pg.done >= pg.total ? '  ✓' : `  (${pg.done}/${pg.total})`) : '');
 }
 function updateBookOption(id) { const o = document.querySelector(`#bookSel option[value="${CSS.escape(id)}"]`); if (o) o.textContent = bookLabel(id); }
 // 목록마다 내 진행률을 뒤에서 조용히 불러옴
 async function loadProgress() {
-  if (!S.coder) return;
-  for (const id of S.cfg.books) {
-    if (id === S.book) continue;
+  await Promise.all(S.cfg.books.map(async (id) => {
     try {
-      const [u, c] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)]);
-      const units = (u.data && u.data.units) || [], items = (c.data && c.data.items) || {};
-      const req = units.filter(isRequired);
-      S.prog[id] = { done: req.filter((x) => isDone(items[x.id])).length, total: req.length };
+      const [u, p] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&progress=1`)]);
+      const units = (u.data && u.data.units) || [];
+      const req = units.filter(isRequired), reqIds = new Set(req.map((x) => x.id));
+      const by = {};
+      S.cfg.coders.forEach((c) => { const v = (p && p[c]) || {}; by[c] = { n: (v.ids || []).filter((x) => reqIds.has(x)).length, fin: !!v.done }; });
+      const mine = id === S.book && S.prog[id] ? S.prog[id].done : (by[S.coder] ? by[S.coder].n : 0);
+      S.prog[id] = { done: mine, total: req.length, by };
       updateBookOption(id);
     } catch {}
-  }
+  }));
 }
 const bookName = (id) => { const m = S.metas[id]; if (!m) return id; if (m.type === 'curriculum') return `${m.period || ''} 교육과정`.trim(); return `${m.period || ''} ${m.publisher || ''} ${m.title || id}`.trim(); };
 
@@ -467,6 +473,7 @@ async function selectBook(id) {
   await loadMine();
   const p = Number(ls.get('page:' + id)); if (p && S.metas[id] && p < S.metas[id].pages.length) S.page = p;
   renderAll();
+  loadProgress(); // 목록을 바꿀 때마다 세 명 진행률 새로 받기
 }
 
 async function loadMine() {
@@ -765,7 +772,7 @@ function renderList() {
   const m = S.metas[S.book];
   const req = S.units.filter(isRequired);
   const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
-  if (S.book) { S.prog[S.book] = { done, total: req.length }; updateBookOption(S.book); }
+  if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
   $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
@@ -890,6 +897,7 @@ function bindCoding() {
       if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
     S.mine.done = !S.mine.done; renderDone(); await saveMine();
+    { const pg = S.prog[S.book]; if (pg && pg.by && pg.by[S.coder]) { pg.by[S.coder].fin = S.mine.done; updateBookOption(S.book); } }
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
   };
   $('#exportMine').onclick = () => exportCSV(S.book, S.coder, S.mine.items, `${S.book}_${S.coder}_코딩.csv`);

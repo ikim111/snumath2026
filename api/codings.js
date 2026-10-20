@@ -15,6 +15,17 @@ export async function GET(req) {
   if (!okId(book)) return json({ error: 'book 필요' }, 400);
   const list = await coders();
 
+  // 진행률만: 코드 내용 없이 '다 한 단위 id'와 완료 여부만 (블라인드 유지)
+  if (q.get('progress')) {
+    const files = await Promise.all(list.map((c) => readJSON(`codings/${book}/${c}.json`)));
+    const out = {};
+    list.forEach((c, i) => {
+      const d = files[i].data || {}, items = d.items || {};
+      out[c] = { done: !!d.done, ids: Object.keys(items).filter((k) => { const it = items[k] || {}; return ((it.codes && it.codes.length) || it.code) && it.lit; }) };
+    });
+    return json(out);
+  }
+
   if (q.get('all')) {
     const files = await Promise.all(list.map((c) => readJSON(`codings/${book}/${c}.json`)));
     const status = Object.fromEntries(list.map((c, i) => [c, !!(files[i].data && files[i].data.done)]));
