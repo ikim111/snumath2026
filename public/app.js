@@ -351,7 +351,12 @@ async function loadMine() {
 
 function sortUnits() {
   if (isCur()) return;
-  S.units.sort((a, b) => a.page - b.page || Math.round(a.r[1] * 200) - Math.round(b.r[1] * 200) || a.r[0] - b.r[0] || (a.t || 0) - (b.t || 0));
+  const m = S.metas[S.book] || {};
+  // 두 단으로 된 쪽: 오른쪽 단(가운데보다 오른쪽에서 시작하는 좁은 박스)은 왼쪽 단 다음에 센다
+  const twoCol = new Set();
+  S.units.forEach((u) => { if (u.r[0] >= 0.48 && u.r[2] < 0.55) twoCol.add(u.page); });
+  const col = (u) => (twoCol.has(u.page) && S.units.some((v) => v.page === u.page && v.r[0] + v.r[2] <= 0.55) && u.r[0] >= 0.48 && u.r[2] < 0.55 ? 1 : 0);
+  S.units.sort((a, b) => a.page - b.page || col(a) - col(b) || Math.round(a.r[1] * 200) - Math.round(b.r[1] * 200) || a.r[0] - b.r[0] || (a.t || 0) - (b.t || 0));
 }
 const unitNo = (u) => S.units.indexOf(u) + 1;
 const unitById = (id) => S.units.find((u) => u.id === id);
@@ -519,7 +524,7 @@ function renderPanel() {
       <label>발문 요약</label><input data-f="summary" value="${esc(u.summary)}">
       <label>과제 번호</label><input data-f="task" value="${esc(u.task)}">
       <label>위치</label><select data-f="pos">${opt(S.cfg.positions, u.pos)}</select>
-      <label>성취기준</label><select data-f="std">${opt(S.cfg.stdList, u.std)}</select>
+      <label>성취기준</label><select data-f="std">${opt([...new Set([...S.units.map((x) => x.std).filter(Boolean), ...S.cfg.stdList])], u.std)}</select>
     </div>`}
     <div class="unit-tools">
       <button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button>
@@ -1158,13 +1163,13 @@ function renderSettings() {
     </table>
     <h3>교과서 묶음 올리기</h3>
     <p class="note">Claude가 만들어 준 교과서 묶음(.zip: 쪽 이미지 + 1차 박스)을 올립니다. 쪽 이미지는 저장소(GitHub)가 아닌 비공개 저장공간에만 보관됩니다.</p>
-    <div id="dropZone" class="dropzone">zip 파일을 여기에 끌어다 놓으세요</div>
-    <div class="bar"><input type="file" id="pkgFile" accept=".zip"><button id="pkgGo" class="primary">올리기</button><span id="pkgMsg" class="hint"></span></div>`;
-  $('#pkgGo').onclick = () => uploadPackage($('#pkgFile').files[0]);
+    <div id="dropZone" class="dropzone">zip 파일을 여기에 끌어다 놓으세요 (여러 개 한 번에 가능)</div>
+    <div class="bar"><input type="file" id="pkgFile" accept=".zip" multiple><button id="pkgGo" class="primary">올리기</button><span id="pkgMsg" class="hint"></span></div>`;
+  $('#pkgGo').onclick = () => uploadMany($('#pkgFile').files);
   const dz = $('#dropZone');
   ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
-  dz.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) uploadPackage(f); });
+  dz.addEventListener('drop', (e) => uploadMany(e.dataTransfer.files));
 
   $('#copyLink').onclick = () => { navigator.clipboard.writeText(link).then(() => toast('복사했습니다')); };
   $('#sSave').onclick = async () => {
@@ -1198,7 +1203,14 @@ function renderSettings() {
 function loadScript(src) {
   return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
 }
-async function uploadPackage(file) {
+async function uploadMany(files) {
+  const list = [...(files || [])].filter((f) => /\.zip$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+  if (!list.length) return toast('zip 파일을 고르세요');
+  for (const f of list) await uploadPackage(f, true);
+  fillHeader(); renderSettings();
+  toast(`${list.length}개 묶음을 올렸습니다`);
+}
+async function uploadPackage(file, many = false) {
   const msg = (t) => { $('#pkgMsg').textContent = t; };
   if (!file) return toast('zip 파일을 고르세요');
   if (!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
@@ -1234,8 +1246,7 @@ async function uploadPackage(file) {
     }
     S.metas[id] = meta;
     msg(`완료: ${id} (${pages.length}쪽${writeUnits ? `, 박스 ${units.length}개` : ''})`);
-    fillHeader(); await selectBook(id); renderSettings();
-    toast(`${id}을(를) 올렸습니다`);
+    if (!many) { fillHeader(); await selectBook(id); renderSettings(); toast(`${id}을(를) 올렸습니다`); }
   } catch (e) { msg('실패: ' + e.message); }
 }
 
