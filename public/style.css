@@ -313,3 +313,7 @@ table.ov tr.ov-main td { font-weight: 600; }
 table.ov tr.ov-sub td { font-size: 12px; color: var(--muted); }
 table.ov tr.on td { background: var(--accent-soft); }
 .det-h { border-top: 2px solid var(--line); padding-top: 14px; }
+
+.tour-card { max-height: calc(100dvh - 20px); overflow: auto; }
+.tour-x { position: absolute; top: 8px; right: 8px; border: none; background: none; font-size: 16px; color: var(--muted); padding: 2px 6px; }
+.tour-card { position: fixed; }

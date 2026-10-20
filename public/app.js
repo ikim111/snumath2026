@@ -1532,18 +1532,19 @@ function startTour() {
     const el = $(sel); if (!el) { next(); return; }
     const r = el.getBoundingClientRect();
     Object.assign(hole.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
-    card.innerHTML = `<div class="tour-step">${i + 1} / ${TOUR.length}</div><h3>${st.title}</h3><p>${st.text}</p>
-      <div class="tour-btns"><button id="tourSkip">닫기</button><button id="tourNext" class="primary">${i === TOUR.length - 1 ? '시작하기' : '다음'}</button></div>`;
+    card.innerHTML = `<button id="tourX" class="tour-x" title="안내 건너뛰기">✕</button><div class="tour-step">${i + 1} / ${TOUR.length}</div><h3>${st.title}</h3><p>${st.text}</p>
+      <div class="tour-btns"><button id="tourSkip">안내 건너뛰기</button><button id="tourNext" class="primary">${i === TOUR.length - 1 ? '시작하기' : '다음'}</button></div>`;
     const cw = 330, ch = card.offsetHeight || 170;
     let left = r.left, top = r.bottom + 14;
     if (top + ch > window.innerHeight - 10) top = Math.max(10, r.top - ch - 14);
     if (top < 10 || r.height > window.innerHeight * 0.6) { top = Math.min(window.innerHeight - ch - 20, r.top + 20); left = r.left - cw - 20 > 10 ? r.left - cw - 20 : r.right - cw - 20; }
     card.style.left = Math.max(10, Math.min(window.innerWidth - cw - 10, left)) + 'px';
-    card.style.top = Math.max(10, top) + 'px';
-    $('#tourNext').onclick = next; $('#tourSkip').onclick = end;
+    card.style.top = Math.max(10, Math.min(window.innerHeight - (card.offsetHeight || ch) - 10, top)) + 'px'; // 화면 밖으로 안 나가게
+    $('#tourNext').onclick = next; $('#tourSkip').onclick = end; $('#tourX').onclick = end;
   };
   const next = () => { i++; if (i >= TOUR.length) end(); else show(); };
   const end = () => { box.classList.add('hidden'); ls.set('tourDone', '1'); };
+  box.onclick = (e) => { if (e.target === box) end(); }; // 어두운 바깥을 누르면 닫힘
   box.classList.remove('hidden'); show();
 }
 
