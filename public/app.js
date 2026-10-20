@@ -620,16 +620,18 @@ function step(d) {
 const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
-const HASTOUCH = TOUCH || (navigator.maxTouchPoints || 0) > 0; // 아이패드는 키보드·트랙패드가 붙으면 hover가 있다고 나옴
+// 태블릿·폰만 처음부터 터치로 봄(아이패드는 키보드가 붙으면 hover가 있다고 나와서 따로 확인). 터치 화면 노트북은 마우스로 시작
+const HASTOUCH = TOUCH || /iPad|iPhone|Android/i.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && (navigator.maxTouchPoints || 0) > 1);
 let LASTPT = HASTOUCH ? 'touch' : 'mouse';
 const isTouch = () => LASTPT === 'touch' || LASTPT === 'pen';
 const markTouch = () => { if (!document.body.classList.contains('touch')) { document.body.classList.add('touch'); if (S.book) renderPage(); } };
 document.addEventListener('pointerdown', (e) => {
   const was = isTouch(); LASTPT = e.pointerType || 'mouse';
   if (isTouch()) markTouch();
+  else if (document.body.classList.contains('touch') && !TOUCH) { document.body.classList.remove('touch'); if (S.book) renderPage(); } // 마우스를 쓰면 다시 컴퓨터 화면으로
   if (was !== isTouch() && S.book) setTimeout(renderPanel, 0); // 안내 문구 바꾸기
 }, true);
-if (HASTOUCH || (window.matchMedia && matchMedia('(pointer: coarse)').matches)) document.addEventListener('DOMContentLoaded', markTouch);
+if (HASTOUCH) document.addEventListener('DOMContentLoaded', markTouch);
 document.addEventListener('touchstart', (e) => {
   if (e.target.closest && e.target.closest('[data-code]')) return;
   $('#tip').classList.add('hidden'); S.tipCode = null;
