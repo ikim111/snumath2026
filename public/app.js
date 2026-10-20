@@ -275,7 +275,10 @@ function autoCE(u) {
 const unitCE = (u) => (u && Array.isArray(u.ce) && u.ce.length ? u.ce : autoCE(u || {}));
 // 문제해결 코드는 여러 개 가능 (예전 기록의 code 하나도 읽음)
 const codesOf = (it) => (it && Array.isArray(it.codes) ? it.codes : it && it.code ? [it.code] : []);
+const litMark = (lit) => (!lit ? '' : lit === '해당 없음' ? 'X' : litShort(lit)[0]);
 const codeStr = (it) => codesOf(it).join('·');
+// 목록·박스에 보이는 짧은 표시: 코드 + 소양 첫 글자 (예: R2 절, I1 의, R3 X)
+const markStr = (it) => [codeStr(it), litMark(it && it.lit)].filter(Boolean).join(' ');
 const firstColor = (it) => (codesOf(it).length ? stageColor(codesOf(it)[0]) : 'var(--muted)');
 const isDone = (it) => !!(it && codesOf(it).length && it.lit); // 필수 두 가지를 모두 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
@@ -493,7 +496,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${firstColor(it)}">${esc(codeStr(it) || '·')}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${firstColor(it)}">${esc(markStr(it) || '·')}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -544,7 +547,7 @@ async function renderPage() {
 function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
-  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${codesOf(it).length ? ' · ' + codeStr(it) : ''}`;
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${markStr(it) ? ' · ' + markStr(it) : ''}`;
   return `${unitNo(u)}${extra ? `<span class="tc">${esc(extra)}</span>` : ''}`;
 }
 
@@ -726,7 +729,7 @@ function renderList() {
     return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c" style="color:${firstColor(it)}">${isDone(it) ? '✓ ' : ''}${esc(codeStr(it) || (isRequired(u) ? '·' : ''))}</span></div>`;
+      <span class="c" style="color:${firstColor(it)}">${esc(markStr(it) || (isRequired(u) ? '·' : ''))}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -1071,7 +1074,7 @@ async function renderCompare() {
       ${shown.map(({ u, its, dis }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
-        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${it.lit ? `<br><span class="hint">${esc(litShort(it.lit))}</span>` : ''}</td>`).join('');
+        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${it.lit ? ` <span class="hint">${esc(litMark(it.lit))}</span>` : ''}</td>`).join('');
         const mj = majCodes(its);
         return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
           <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>

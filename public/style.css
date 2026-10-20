@@ -236,3 +236,6 @@ table.t tr.dis td.fin { background: #fff; }
 .box .tag { left: -10px; top: -10px; right: auto !important; min-width: 20px; height: 20px; line-height: 20px; padding: 0 5px; border-radius: 10px; font-size: 10.5px; text-align: center; opacity: 1; box-shadow: 0 0 0 2px #fff; }
 .box .tag .tc { display: none; }
 .box.sel .tag .tc, .box:hover .tag .tc { display: inline; }
+
+.unit-list .row { grid-template-columns: 30px 38px 1fr 64px; }
+.crow { grid-template-columns: 40px 118px 1fr 76px; }
