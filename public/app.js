@@ -279,6 +279,13 @@ const litMark = (lit) => (!lit ? '' : lit === '해당 없음' ? 'X' : litShort(l
 const codeStr = (it) => codesOf(it).join('·');
 // 목록·박스에 보이는 짧은 표시: 코드 + 소양 첫 글자 (예: R2 절, I1 의, R3 X)
 const markStr = (it) => [codeStr(it), litMark(it && it.lit)].filter(Boolean).join(' ');
+const LIT_CLS = { 절: 'lm-p', 비: 'lm-c', 의: 'lm-m', X: 'lm-x' };
+const litBadge = (lit) => { const m = litMark(lit); return m ? `<span class="lm ${LIT_CLS[m] || ''}">${m}</span>` : ''; };
+// 색 있는 표시: 코드(단계 색) + 소양 배지
+const markHtml = (it, empty = '·') => {
+  const c = codeStr(it), b = litBadge(it && it.lit);
+  return c || b ? `<span style="color:${firstColor(it)}">${esc(c)}</span>${b}` : `<span style="color:var(--muted)">${empty}</span>`;
+};
 const firstColor = (it) => (codesOf(it).length ? stageColor(codesOf(it)[0]) : 'var(--muted)');
 const isDone = (it) => !!(it && codesOf(it).length && it.lit); // 필수 두 가지를 모두 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
@@ -496,7 +503,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode" style="color:${firstColor(it)}">${esc(markStr(it) || '·')}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -547,8 +554,8 @@ async function renderPage() {
 function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
-  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${markStr(it) ? ' · ' + markStr(it) : ''}`;
-  return `${unitNo(u)}${extra ? `<span class="tc">${esc(extra)}</span>` : ''}`;
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${codeStr(it) ? ' · ' + codeStr(it) : ''}`;
+  return `${unitNo(u)}${extra || it.lit ? `<span class="tc">${esc(extra)}${litBadge(it.lit)}</span>` : ''}`;
 }
 
 function renderBoxes() {
@@ -675,7 +682,7 @@ function renderPanel() {
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
-    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
+    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
     <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점">${esc(it.memo)}</textarea>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
   `;
@@ -729,7 +736,7 @@ function renderList() {
     return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c" style="color:${firstColor(it)}">${esc(markStr(it) || (isRequired(u) ? '·' : ''))}</span></div>`;
+      <span class="c">${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -1074,7 +1081,7 @@ async function renderCompare() {
       ${shown.map(({ u, its, dis }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
-        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${it.lit ? ` <span class="hint">${esc(litMark(it.lit))}</span>` : ''}</td>`).join('');
+        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${litBadge(it.lit)}</td>`).join('');
         const mj = majCodes(its);
         return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
           <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>

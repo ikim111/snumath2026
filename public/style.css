@@ -239,3 +239,14 @@ table.t tr.dis td.fin { background: #fff; }
 
 .unit-list .row { grid-template-columns: 30px 38px 1fr 64px; }
 .crow { grid-template-columns: 40px 118px 1fr 76px; }
+
+/* 소양 배지: 절(파랑회색) 비(빨강) 의(청록) X(회색) */
+.lm { display: inline-block; min-width: 17px; height: 17px; line-height: 17px; border-radius: 4px; font-size: 11px; font-weight: 700; text-align: center; margin-left: 4px; padding: 0 3px; vertical-align: 1px; color: #fff; }
+.lm-p { background: #5b6b8c; }
+.lm-c { background: #c0392b; }
+.lm-m { background: #128a8a; }
+.lm-x { background: #fff; color: #7a7870; border: 1px solid #b9b5a9; line-height: 15px; }
+.box .tag .lm { height: 15px; line-height: 15px; min-width: 15px; font-size: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,.7); }
+.lit-grid button b .lm { margin: 0 3px 0 0; }
+.lit-grid button span.lm, .lit-grid button.on span.lm { color: #fff; font-size: 11px; }
+.lit-grid button span.lm-x, .lit-grid button.on span.lm-x { color: #7a7870; }
