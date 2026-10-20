@@ -23,6 +23,7 @@
     <button data-tab="settings">설정</button>
   </nav>
   <div id="saveState" class="save"></div>
+  <button id="helpBtn" class="help" title="사용 안내 다시 보기">?</button>
 </header>
 
 <main>
@@ -56,7 +57,7 @@
         <div id="unitPanel"></div>
         <div class="unit-list-head">
           <b>분석 단위</b> <span id="progress"></span>
-          <label class="mini"><input type="checkbox" id="onlyTodo"> 미코딩만</label>
+          <label class="mini"><input type="checkbox" id="onlyTodo"> 안 한 것만</label>
         </div>
         <div class="unit-list" id="unitList"></div>
         <div class="panel-foot">
@@ -98,6 +99,7 @@
     <div id="whoList" class="who-list"></div>
   </div>
 </div>
+<div id="tour" class="tour hidden"><div id="tourHole" class="tour-hole"></div><div id="tourCard" class="tour-card"></div></div>
 <div id="tip" class="tipbox hidden"></div>
 <div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>

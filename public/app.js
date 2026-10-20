@@ -97,7 +97,7 @@ const S = {
   metas: {}, book: null, units: [], unitsEtag: null, dirty: new Set(), deleted: new Set(),
   mine: { done: false, items: {} }, mineEtag: null,
   coder: '', page: 0, sel: null, multi: new Set(), edit: false, draw: false, zoom: 1,
-  imgCache: new Map(),
+  imgCache: new Map(), prog: {}, metaOpen: false,
 };
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -221,6 +221,7 @@ function where(bookId, u) {
   if (m.type === 'curriculum') return `${u.std || ''} ${u.task || ''}`.trim();
   return m.pages[u.page] ? m.pages[u.page].label + '쪽' : '';
 }
+const isDone = (it) => !!(it && it.code && it.lit); // 필수 두 가지를 모두 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
 // ───────── 시작 ─────────
@@ -261,6 +262,11 @@ async function init() {
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
   }
+  if (S.cfg.books.includes('T0') && !S.cfg.v3) {
+    const next = { ...S.cfg, books: S.cfg.books.filter((x) => x !== 'T0'), v3: true };
+    const r = await putStore('config/app.json', next, S.cfgEtag);
+    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+  }
   await loadMetas();
   await seedCurriculum();
   fillHeader();
@@ -269,6 +275,9 @@ async function init() {
   const b = ls.get('book');
   await selectBook(S.cfg.books.includes(b) ? b : S.cfg.books[0]);
   saveState('');
+  $('#helpBtn').onclick = startTour;
+  if (S.coder && !ls.get('tourDone')) setTimeout(startTour, 500);
+  loadProgress();
 }
 
 // 교육과정(공개 문서) 의미 단위를 처음 한 번 등록
@@ -293,23 +302,61 @@ async function loadMetas() {
   const rs = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/meta.json`)));
   S.cfg.books.forEach((id, i) => { if (rs[i].data) S.metas[id] = rs[i].data; });
 }
+function bookLabel(id) {
+  const m = S.metas[id] || {}, pg = S.prog[id];
+  const name = isCur(id) ? bookName(id) : `${m.publisher || ''} ${m.title || id}`.trim();
+  return name + (pg && pg.total ? (pg.done >= pg.total ? '  ✓' : `  (${pg.done}/${pg.total})`) : '');
+}
+function updateBookOption(id) { const o = document.querySelector(`#bookSel option[value="${CSS.escape(id)}"]`); if (o) o.textContent = bookLabel(id); }
+// 목록마다 내 진행률을 뒤에서 조용히 불러옴
+async function loadProgress() {
+  if (!S.coder) return;
+  for (const id of S.cfg.books) {
+    if (id === S.book) continue;
+    try {
+      const [u, c] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)]);
+      const units = (u.data && u.data.units) || [], items = (c.data && c.data.items) || {};
+      const req = units.filter(isRequired);
+      S.prog[id] = { done: req.filter((x) => isDone(items[x.id])).length, total: req.length };
+      updateBookOption(id);
+    } catch {}
+  }
+}
 const bookName = (id) => { const m = S.metas[id]; if (!m) return id; if (m.type === 'curriculum') return `${m.period || ''} 교육과정`.trim(); return `${m.period || ''} ${m.publisher || ''} ${m.title || id}`.trim(); };
 
 function fillHeader() {
-  $('#bookSel').innerHTML = S.cfg.books.map((id) => `<option value="${esc(id)}">${esc(isCur(id) ? bookName(id) : id + ' · ' + bookName(id))}</option>`).join('') || '<option value="">(교과서 없음)</option>';
+  fillHeader.books();
   $('#bookSel').onchange = (e) => selectBook(e.target.value);
+  fillHeader.coders();
+}
+fillHeader.books = function () {
+  const groups = [];
+  S.cfg.books.forEach((id) => {
+    const m = S.metas[id] || {};
+    const g = isCur(id) ? '교육과정' : `${m.period || ''} 교과서`;
+    let x = groups.find((y) => y.g === g); if (!x) groups.push(x = { g, ids: [] }); x.ids.push(id);
+  });
+  groups.sort((a, b) => (a.g === '교육과정' ? -1 : b.g === '교육과정' ? 1 : a.g.localeCompare(b.g)));
+  groups.forEach((x) => x.ids.sort((a, b) => ((S.metas[a] || {}).title || a).localeCompare((S.metas[b] || {}).title || b, 'ko', { numeric: true })));
+  $('#bookSel').innerHTML = groups.map((x) => `<optgroup label="${esc(x.g)}">${x.ids.map((id) => `<option value="${esc(id)}">${esc(bookLabel(id))}</option>`).join('')}</optgroup>`).join('') || '<option value="">(목록 없음)</option>';
+};
+fillHeader.coders = function () {
   const saved = ls.get('coder');
   $('#coderSel').innerHTML = '<option value="">선택하세요</option>' + S.cfg.coders.map((c) => `<option ${c === saved ? 'selected' : ''}>${esc(c)}</option>`).join('');
   S.coder = S.cfg.coders.includes(saved) ? saved : '';
   $('#coderSel').onchange = (e) => setCoder(e.target.value);
   if (!S.coder) showWho();
-}
+};
 
 async function setCoder(name) {
   S.coder = name; ls.set('coder', name); $('#coderSel').value = name;
   $('#who').classList.add('hidden');
+  S.prog = {}; fillHeaderBooks();
   await loadMine(); renderAll();
+  if (name && !ls.get('tourDone')) setTimeout(startTour, 400);
+  loadProgress();
 }
+function fillHeaderBooks() { const v = S.book; const sel = $('#bookSel'); const save = sel.onchange; fillHeader.books(); sel.value = v || ''; sel.onchange = save; }
 function showWho() {
   $('#whoList').innerHTML = S.cfg.coders.map((c) => `<button data-who="${esc(c)}">${esc(c)}</button>`).join('');
   $('#whoList').onclick = (e) => { const b = e.target.closest('[data-who]'); if (b) setCoder(b.dataset.who); };
@@ -331,6 +378,7 @@ async function selectBook(id) {
   S.book = id || null; S.sel = null; S.page = 0;
   if (id) ls.set('book', id);
   $('#bookSel').value = id || '';
+  $('#who').classList.toggle('hidden', !!S.coder);
   S.units = []; S.unitsEtag = null; S.dirty.clear(); S.deleted.clear();
   if (id) {
     const u = await getStore(`books/${id}/units.json`);
@@ -386,7 +434,7 @@ function renderPages() {
   if (!m || !m.pages) { $('#pageList').innerHTML = ''; return; }
   $('#pageList').innerHTML = m.pages.map((p, i) => {
     const us = S.units.filter((u) => u.page === i);
-    const todo = us.filter((u) => isRequired(u) && !(S.mine.items[u.id] || {}).code).length;
+    const todo = us.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
     return `<button data-i="${i}" class="${i === S.page ? 'on' : ''}">${esc(p.label)}<span class="cnt">${us.length}개${todo ? ' · 남음 ' + todo : us.length ? ' ✓' : ''}</span></button>`;
   }).join('');
   $('#pageList').onclick = (e) => { const b = e.target.closest('button'); if (b) goPage(+b.dataset.i); };
@@ -437,7 +485,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', it.code ? 'coded' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : it.code || it.lit ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
     const [x, y, w, h] = u.r;
     return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"><span class="tag" style="right:${shift * 46}px">${esc(boxLabel(u))}</span><span class="handle"></span></div>`;
   }).join('');
@@ -470,13 +518,20 @@ function select(id, scroll = true) {
     if (cr) cr.scrollIntoView({ block: 'nearest' });
   }
 }
+function goNextTodo() {
+  const i = S.units.findIndex((u) => u.id === S.sel);
+  const after = S.units.slice(i + 1).concat(S.units.slice(0, i + 1));
+  const next = after.find((u) => isRequired(u) && !isDone(S.mine.items[u.id]));
+  if (!next) { toast('이 목록의 필수 단위를 모두 했어요! 오른쪽 아래 \'코딩 완료\'를 눌러 주세요.', 3500); step(1); return; }
+  select(next.id);
+}
 function step(d) {
   const list = visibleUnits(); if (!list.length) return;
   let i = list.findIndex((u) => u.id === S.sel);
   i = i < 0 ? 0 : Math.max(0, Math.min(list.length - 1, i + d));
   select(list[i].id);
 }
-const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !(S.mine.items[u.id] || {}).code)) : S.units;
+const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
 
 function renderPanel() {
   $('#tip').classList.add('hidden');
@@ -507,42 +562,53 @@ function renderPanel() {
   const opt = (list, v) => ['', ...list].map((x) => `<option ${x === (v || '') ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('');
   const canCode = !!S.coder;
 
+  const reqHere = isRequired(u);
+  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : it.code ? '② 통계적 소양을 골라 주세요' : it.lit ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
   P.innerHTML = `
     <div class="u-head">
       <span class="num">#${unitNo(u)}</span>
       <span class="kind ${u.kind === 'main' || !u.kind ? 'main' : ''}">${KINDS[u.kind || 'main']}</span>
-      <span class="hint">${esc(where(S.book, u))}${u.src && u.src !== 'claude' ? ' · ' + esc(u.src) + ' 추가' : ''}</span>
-      <span class="nav"><button id="uPrev" title="이전 (↑)">↑</button><button id="uNext" title="다음 (↓)">↓</button></span>
+      <span class="hint">${esc(where(S.book, u))}</span>
+      <span class="nav"><button id="uPrev" title="이전 단위 (↑ 키)">↑</button><button id="uNext" title="다음 단위 (↓ 키)">↓</button></span>
     </div>
-    ${isCur() ? `<div class="meta-grid">
-      <label>성취기준</label><select data-f="std">${opt([...S.cfg.stdList.filter((x) => x !== '기타'), '공통'], u.std)}</select>
-      <label>출처</label><select data-f="task">${opt(['성취기준', '해설', '고려 사항'], u.task)}</select>
-      <label>의미 단위</label><textarea data-f="summary" rows="2">${esc(u.summary)}</textarea>
-    </div>
-    ${u.orig ? `<div class="meta-ro">원문: ${esc(u.orig)}</div>` : ''}` : `<div class="meta-grid">
-      <label>유형</label><select data-f="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === (u.kind || 'main') ? 'selected' : ''}>${v}</option>`).join('')}</select>
-      <label>발문 요약</label><input data-f="summary" value="${esc(u.summary)}">
-      <label>과제 번호</label><input data-f="task" value="${esc(u.task)}">
-      <label>위치</label><select data-f="pos">${opt(S.cfg.positions, u.pos)}</select>
-      <label>성취기준</label><select data-f="std">${opt([...new Set([...S.units.map((x) => x.std).filter(Boolean), ...S.cfg.stdList])], u.std)}</select>
-    </div>`}
-    <div class="unit-tools">
-      <button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button>
-      ${isCur() ? '<button id="uAdd">아래에 문장 추가</button>' : ''}
-      <button id="uDel" class="danger">${isCur() ? '문장' : '박스'} 삭제</button>
-      <span class="hint">Shift+클릭으로 여러 개 골라 합치기</span>
-    </div>
+    <details class="meta-box" ${S.metaOpen ? 'open' : ''}>
+      <summary><span class="summ">${esc(u.summary || u.task || '(요약 없음)')}</span><span class="edit-link">박스 정보 고치기</span></summary>
+      <p class="hint" style="margin:6px 0">박스 정보는 세 명이 함께 씁니다. 고치면 모두에게 반영돼요.</p>
+      ${isCur() ? `<div class="meta-grid">
+        <label>성취기준</label><select data-f="std">${opt([...new Set([...S.units.map((x) => x.std).filter(Boolean), ...S.cfg.stdList.filter((x) => x !== '기타'), '공통'])], u.std)}</select>
+        <label>출처</label><select data-f="task">${opt([...new Set([...S.units.map((x) => x.task).filter(Boolean), '성취기준', '해설', '교수·학습 유의사항'])], u.task)}</select>
+        <label>의미 단위</label><textarea data-f="summary" rows="2">${esc(u.summary)}</textarea>
+      </div>
+      ${u.orig ? `<div class="meta-ro">원문: ${esc(u.orig)}</div>` : ''}` : `<div class="meta-grid">
+        <label>유형</label><select data-f="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === (u.kind || 'main') ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <label>발문 요약</label><input data-f="summary" value="${esc(u.summary)}">
+        <label>과제 번호</label><input data-f="task" value="${esc(u.task)}">
+        <label>위치</label><select data-f="pos">${opt(S.cfg.positions, u.pos)}</select>
+        <label>성취기준</label><select data-f="std">${opt([...new Set([...S.units.map((x) => x.std).filter(Boolean), ...S.cfg.stdList])], u.std)}</select>
+      </div>`}
+      <div class="unit-tools">
+        <button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button>
+        ${isCur() ? '<button id="uAdd">아래에 문장 추가</button>' : ''}
+        <button id="uDel" class="danger">${isCur() ? '문장' : '박스'} 삭제</button>
+        <span class="hint">여러 개 합치기: Shift+클릭</span>
+      </div>
+    </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    ${!isRequired(u) ? '<p class="hint">이 유형은 코드 입력이 선택 사항입니다.</p>' : ''}
+    <div class="step"><span class="stepn ${it.code ? 'ok' : ''}">${it.code ? '✓' : '1'}</span>통계적 문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">이 유형은 선택</span>'}<span class="hint step-hint">마우스를 올리면 설명</span></div>
     ${stages.map((s) => `<div class="stage-row"><div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage)}</div>
-      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${it.code === c.code ? 'on' : ''}" style="${it.code === c.code ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}" title="${esc(c.desc)}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div></div>`).join('')}
-    ${it.code ? `<div class="code-desc">${codeHelp(it.code)}</div>` : '<div class="hint" style="margin:4px 0 10px">코드에 마우스를 올리면 바로 밑에 설명이 나옵니다.</div>'}
-    <div class="sub">내용 요소</div>
-    <div class="chips">${S.cfg.contentElements.map((c) => `<button data-ce="${esc(c)}" class="${(it.ce || []).includes(c) ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-    <div class="sub">통계적 소양 <span class="hint">(하나만)</span></div>
+      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${it.code === c.code ? 'on' : ''}" style="${it.code === c.code ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div></div>`).join('')}
+    ${it.code ? `<div class="code-desc">${codeHelp(it.code)}</div>` : ''}
+    <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">이 유형은 선택</span>'}<span class="hint step-hint">하나만</span></div>
     <div class="chips lit">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-    <textarea id="cMemo" rows="2" placeholder="메모 (판단 근거, 헷갈린 점)">${esc(it.memo)}</textarea>`}
+    <div class="step light">내용 요소 <span class="opt">선택</span></div>
+    <div class="chips">${S.cfg.contentElements.map((c) => `<button data-ce="${esc(c)}" class="${(it.ce || []).includes(c) ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
+    <div class="step light">메모 <span class="opt">선택</span></div>
+    <textarea id="cMemo" rows="2" placeholder="판단 근거나 헷갈린 점 (비교할 때 조원에게 보여요)">${esc(it.memo)}</textarea>
+    <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
   `;
+  P.querySelector('.meta-box').ontoggle = (e) => { S.metaOpen = e.target.open; };
+  if ($('#goNext')) $('#goNext').onclick = goNextTodo;
+
   $('#uPrev').onclick = () => step(-1);
   $('#uNext').onclick = () => step(1);
   P.querySelectorAll('[data-f]').forEach((el) => el.onchange = () => {
@@ -578,14 +644,15 @@ function renderList() {
   const list = visibleUnits();
   const m = S.metas[S.book];
   const req = S.units.filter(isRequired);
-  const done = req.filter((u) => (S.mine.items[u.id] || {}).code).length;
+  const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
+  if (S.book) { S.prog[S.book] = { done, total: req.length }; updateBookOption(S.book); }
   $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
     return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${esc(it.code || (isRequired(u) ? '·' : ''))}</span></div>`;
+      <span class="c" style="color:${it.code ? stageColor(it.code) : 'var(--muted)'}">${isDone(it) ? '✓ ' : ''}${esc(it.code || (isRequired(u) ? '·' : ''))}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -593,7 +660,9 @@ function renderList() {
 function renderDone() {
   const b = $('#doneBtn');
   b.disabled = !S.coder || !S.book;
-  b.textContent = S.mine.done ? '✓ 코딩 완료 (누르면 취소)' : '이 교과서 코딩 완료';
+  const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
+  b.textContent = S.mine.done ? '✓ 코딩 완료 (누르면 취소)' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
+  b.classList.toggle('ready', !S.mine.done && !left && S.units.length > 0);
   b.classList.toggle('done', !!S.mine.done);
 }
 
@@ -603,7 +672,7 @@ function setItem(id, patch, rerender = true) {
   const cur = S.mine.items[id] || {};
   S.mine.items[id] = { ...cur, ...patch, t: Date.now() };
   scheduleMine();
-  if (rerender) { renderPanel(); renderBoxes(); renderList(); renderPages(); }
+  if (rerender) { renderPanel(); renderBoxes(); renderList(); renderPages(); renderCur(); renderDone(); }
 }
 function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(saveMine, 700); }
 async function saveMine(retry = true) {
@@ -697,8 +766,8 @@ function bindCoding() {
   $('#onlyTodo').onchange = renderList;
   $('#doneBtn').onclick = async () => {
     if (!S.mine.done) {
-      const left = S.units.filter((u) => isRequired(u) && !(S.mine.items[u.id] || {}).code).length;
-      if (left && !confirm(`아직 코드가 없는 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
+      const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
+      if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
     S.mine.done = !S.mine.done; renderDone(); await saveMine();
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
@@ -1159,7 +1228,7 @@ function renderSettings() {
 
     <h3>교과서</h3>
     <table class="t"><tr><th>ID</th><th>시기</th><th>출판사</th><th>제목</th><th>쪽 수</th><th>분석 단위</th><th></th></tr>
-      ${c.books.map((id) => { const m = S.metas[id] || {}; return `<tr><td>${esc(id)}</td><td><input data-bm="${esc(id)}" data-k="period" value="${esc(m.period)}" size="6"></td><td><input data-bm="${esc(id)}" data-k="publisher" value="${esc(m.publisher)}" size="10"></td><td><input data-bm="${esc(id)}" data-k="title" value="${esc(m.title)}" size="24"></td><td>${(m.pages || []).length}</td><td>${id === S.book ? S.units.length : ''}</td><td><button data-bsave="${esc(id)}">저장</button></td></tr>`; }).join('')}
+      ${c.books.map((id) => { const m = S.metas[id] || {}; return `<tr><td>${esc(id)}</td><td><input data-bm="${esc(id)}" data-k="period" value="${esc(m.period)}" size="6"></td><td><input data-bm="${esc(id)}" data-k="publisher" value="${esc(m.publisher)}" size="10"></td><td><input data-bm="${esc(id)}" data-k="title" value="${esc(m.title)}" size="24"></td><td>${(m.pages || []).length}</td><td>${id === S.book ? S.units.length : ''}</td><td><button data-bsave="${esc(id)}">저장</button> <button data-bdel="${esc(id)}" class="danger">목록에서 빼기</button></td></tr>`; }).join('')}
     </table>
     <h3>교과서 묶음 올리기</h3>
     <p class="note">Claude가 만들어 준 교과서 묶음(.zip: 쪽 이미지 + 1차 박스)을 올립니다. 쪽 이미지는 저장소(GitHub)가 아닌 비공개 저장공간에만 보관됩니다.</p>
@@ -1189,6 +1258,14 @@ function renderSettings() {
     S.cfg = next; S.cfgEtag = r.etag; CMP.kinds = null; ST.kinds = null;
     fillHeader(); toast('설정을 저장했습니다'); renderSettings();
   };
+  B.querySelectorAll('[data-bdel]').forEach((b) => b.onclick = async () => {
+    const id = b.dataset.bdel;
+    if (!confirm(`'${bookName(id)}'을(를) 목록에서 뺄까요?\n(저장된 박스·코딩은 지워지지 않고 목록에서만 사라집니다)`)) return;
+    const next = { ...S.cfg, books: S.cfg.books.filter((x) => x !== id) };
+    const r = await putStore('config/app.json', next, S.cfgEtag);
+    if (!r.ok) return toast('저장 충돌 — 새로고침 후 다시 해 주세요');
+    S.cfg = next; S.cfgEtag = r.etag; fillHeader(); if (S.book === id) await selectBook(S.cfg.books[0]); renderSettings(); toast('목록에서 뺐습니다');
+  });
   B.querySelectorAll('[data-bsave]').forEach((b) => b.onclick = async () => {
     const id = b.dataset.bsave;
     const cur = await getStore(`books/${id}/meta.json`);
@@ -1197,6 +1274,40 @@ function renderSettings() {
     const r = await putStore(`books/${id}/meta.json`, m, cur.etag);
     if (r.ok) { S.metas[id] = m; fillHeader(); $('#bookSel').value = S.book; toast('저장했습니다'); } else toast('저장 실패');
   });
+}
+
+// ───────── 처음 쓰는 사람 안내 ─────────
+const TOUR = [
+  { el: '#bookSel', title: '① 목록에서 분석할 것을 고르세요', text: '교육과정과 교과서 단원이 시기별로 묶여 있어요. 괄호 안 숫자는 내가 끝낸 개수예요.' },
+  { el: () => isCur() ? '#curView' : '#stageWrap', title: '② 박스(교육과정은 문장)를 누르세요', text: '주황색 박스가 아직 안 한 것, 초록색이 다 한 것이에요. 쪽은 왼쪽 번호로 넘기고, 화면은 잡고 끌어서 움직여요.' },
+  { el: '#unitPanel', title: '③ 오른쪽에서 코드와 소양을 고르세요', text: '① 문제해결 코드와 ② 통계적 소양이 필수예요. 코드에 마우스를 올리면 설명이 나와요. 고르면 자동 저장되고, [다음 ▶]으로 안 한 단위로 넘어가요.' },
+  { el: '#doneBtn', title: '④ 다 했으면 \'코딩 완료\'', text: '세 명이 모두 누르면 비교·일치율 탭에서 서로의 코드를 보고 최종 코드를 정해요. 그 전에는 서로 안 보여요.' },
+  { el: '#helpBtn', title: '다시 보고 싶으면 ?', text: '이 안내는 위쪽 ? 버튼으로 언제든 다시 볼 수 있어요.' },
+];
+function startTour() {
+  if (!$('#tab-code').classList.contains('on')) $('#tabs [data-tab=code]').click();
+  if (!S.sel && S.units.length) select(S.units[0].id, false);
+  let i = 0;
+  const box = $('#tour'), hole = $('#tourHole'), card = $('#tourCard');
+  const show = () => {
+    const st = TOUR[i];
+    const sel = typeof st.el === 'function' ? st.el() : st.el;
+    const el = $(sel); if (!el) { next(); return; }
+    const r = el.getBoundingClientRect();
+    Object.assign(hole.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
+    card.innerHTML = `<div class="tour-step">${i + 1} / ${TOUR.length}</div><h3>${st.title}</h3><p>${st.text}</p>
+      <div class="tour-btns"><button id="tourSkip">닫기</button><button id="tourNext" class="primary">${i === TOUR.length - 1 ? '시작하기' : '다음'}</button></div>`;
+    const cw = 330, ch = card.offsetHeight || 170;
+    let left = r.left, top = r.bottom + 14;
+    if (top + ch > window.innerHeight - 10) top = Math.max(10, r.top - ch - 14);
+    if (top < 10 || r.height > window.innerHeight * 0.6) { top = Math.min(window.innerHeight - ch - 20, r.top + 20); left = r.left - cw - 20 > 10 ? r.left - cw - 20 : r.right - cw - 20; }
+    card.style.left = Math.max(10, Math.min(window.innerWidth - cw - 10, left)) + 'px';
+    card.style.top = Math.max(10, top) + 'px';
+    $('#tourNext').onclick = next; $('#tourSkip').onclick = end;
+  };
+  const next = () => { i++; if (i >= TOUR.length) end(); else show(); };
+  const end = () => { box.classList.add('hidden'); ls.set('tourDone', '1'); };
+  box.classList.remove('hidden'); show();
 }
 
 // ───────── 교과서 묶음(.zip) 올리기 ─────────

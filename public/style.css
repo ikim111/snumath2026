@@ -169,3 +169,40 @@ table.t tr.dis td.fin { background: #fff; }
 
 .tipbox { position: fixed; z-index: 70; max-width: 340px; background: var(--ink); color: #fff; font-size: 12.5px; line-height: 1.55; padding: 8px 11px; border-radius: 7px; box-shadow: 0 4px 14px rgba(0,0,0,.18); pointer-events: none; }
 .tipbox .tip { color: #a9c6ff; margin-top: 3px; }
+
+/* 처음 쓰는 사람용 */
+.help { width: 28px; height: 28px; border-radius: 50%; padding: 0; font-weight: 700; margin-left: 6px; }
+.meta-box { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 12px; background: #faf9f6; }
+.meta-box summary { cursor: pointer; display: flex; gap: 8px; align-items: center; list-style: none; }
+.meta-box summary::-webkit-details-marker { display: none; }
+.meta-box .summ { flex: 1; font-size: 13px; font-weight: 600; }
+.meta-box .edit-link { font-size: 11px; color: var(--accent); white-space: nowrap; }
+.meta-box[open] .edit-link::after { content: ' ▲'; }
+.meta-box:not([open]) .edit-link::after { content: ' ▼'; }
+.meta-box .meta-grid { margin-top: 6px; }
+.step { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13.5px; margin: 12px 0 6px; }
+.step.light { font-weight: 600; color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+.stepn { display: inline-flex; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; align-items: center; justify-content: center; }
+.stepn.ok { background: var(--ok); }
+.req { font-size: 10.5px; color: var(--bad); border: 1px solid var(--bad-soft); background: var(--bad-soft); border-radius: 8px; padding: 0 6px; font-weight: 600; }
+.opt { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; font-weight: 500; }
+.step-hint { font-weight: 400; margin-left: auto; font-size: 11px; }
+.next-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; position: sticky; bottom: -12px; background: var(--panel); padding: 8px 0; border-top: 1px solid var(--line); }
+.next-row .status { flex: 1; font-size: 12.5px; color: var(--warn); font-weight: 600; }
+.next-row .status.ok { color: var(--ok); }
+.next-row button { padding: 6px 18px; font-weight: 700; }
+.box.partial { border-color: #d9a441; border-style: dashed; }
+.panel-foot .primary.ready { background: var(--ok); border-color: var(--ok); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(47,125,79,.4); } 50% { box-shadow: 0 0 0 6px rgba(47,125,79,0); } }
+.tour { position: fixed; inset: 0; z-index: 80; }
+.tour-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(20,20,18,.55); transition: all .25s; pointer-events: none; border: 2px solid #fff; }
+.tour-card { position: fixed; width: 330px; background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.tour-card h3 { margin: 2px 0 6px; font-size: 15px; }
+.tour-card p { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: #333; }
+.tour-step { font-size: 11px; color: var(--muted); }
+.tour-btns { display: flex; justify-content: flex-end; gap: 6px; }
+
+.code-layout.cur .unit-list-head, .code-layout.cur .unit-list { display: none; }
+.code-layout.cur #unitPanel { max-height: none; flex: 1; }
+.crow { grid-template-columns: 40px 118px 1fr 64px; }
+.crow .kind { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
