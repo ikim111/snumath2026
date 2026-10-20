@@ -29,6 +29,7 @@ const FRAMEWORK_CSV = `후보,단계,코드,이름,학생이 하는 일
 전혜원·김래영2019,R 자료 표현 및 분석,R3,분석,"표현된 자료를 있는 그대로 읽기(값 읽기, 비교, 분포 특징)","(R3.1) 표현도구들에서 제목이나 축의 이름, 주어진 자료 이름 등과 같이 그래프에서 확실히 시각화된 자료를 명확히 관찰하는 것으로 한 눈에 바로 읽을 수 있는 정보를 읽을 수 있다. (R3.2) 국소적인 시각으로 표현된 자료들의 관계를 비교한다. 이 때 문맥에서 요소의 의미를 고려하지 않고 시각적인 것으로 해석한다. (R3.3) 표현된 값의 대부분 또는 전부를 종합하거나 통합해서 하나의 진술이나 관계로 분석한다."
 전혜원·김래영2019,I 결과 해석,I1,해석,"분석 결과를 원래 문제 상황과 연결해 결론 내리기, 추론·예측 포함","자료 분석을 바탕으로 초기에 설정한 문제와 연관 지어서 해석한다. 자료에 내재되어 있는 의미로부터 추론하고 예측하여 자료 이면에 있는 정보를 추론한다."
 전혜원·김래영2019,I 결과 해석,I2,확인·평가,"이미 나온 해석·주장·결론이 적절한지 따지기",해석한 것을 확인하고 평가한다.
+전혜원·김래영2019,X 해당 없음,X,해당 없음,F·P·R·I 어디에도 해당하지 않음 (예: 용어의 뜻 알기),조에서 추가한 코드 (원문 표에는 없음)
 배혜진·이동환2016,F 문제 설정,F1,교사의 문제 제기,
 배혜진·이동환2016,F 문제 설정,F2,문제화,
 배혜진·이동환2016,C 자료 수집,C1,조사의 절차,
@@ -108,7 +109,7 @@ const DEFAULT_CFG = () => ({
   defaultKinds: ['main', 'intro', 'example'],
   litList: ['통계·수학적 지식의 절차적 활용', '비판적 평가', '의사소통', '해당 없음'],
   books: [],
-  v2: true, v3: true, v4: true,
+  v2: true, v3: true, v4: true, v5: true,
 });
 
 // ───────── 상태 ─────────
@@ -302,6 +303,12 @@ async function init() {
     const fresh = DEFAULT_CFG();
     const next = { ...S.cfg, v2: true, activeFramework: '전혜원·김래영2019', defaultKinds: ['main', 'intro', 'example'], litList: fresh.litList,
       frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
+    const r = await putStore('config/app.json', next, S.cfgEtag);
+    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+  }
+  if (!S.cfg.v5) {
+    const fresh = DEFAULT_CFG();
+    const next = { ...S.cfg, v4: true, v5: true, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
   }
