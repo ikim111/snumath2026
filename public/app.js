@@ -487,7 +487,9 @@ function renderBoxes() {
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
     const cls = ['box', isDone(it) ? 'coded' : it.code || it.lit ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
     const [x, y, w, h] = u.r;
-    return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%"><span class="tag" style="right:${shift * 46}px">${esc(boxLabel(u))}</span><span class="handle"></span></div>`;
+    // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
+    const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
+    return `<div class="${cls}" data-id="${u.id}" style="left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%;z-index:${z}"><span class="tag" style="right:${shift * 46}px">${esc(boxLabel(u))}</span><span class="handle"></span></div>`;
   }).join('');
   $('#boxes').innerHTML = html;
 }
