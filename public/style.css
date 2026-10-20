@@ -285,3 +285,15 @@ table.t tr.dis td.fin { background: #fff; }
   .crow .kind { display: none; }
   .pad { padding: 12px; }
 }
+
+/* 터치 기기(태블릿 포함): 쪽 목록 칸 숨겨 교과서 넓게, 박스 번호·버튼 크게, 브라우저 확대 대신 교과서만 확대 */
+.touch .code-layout { grid-template-columns: 0 1fr 360px; }
+.touch .pages { padding: 0; border: 0; overflow: hidden; }
+.touch .stage-wrap { touch-action: pan-x pan-y; }
+.touch .stage { cursor: default; }
+.touch #addBox, .touch .vtool .toggle, .touch #editHelp { display: none !important; }
+.touch .box .tag { min-width: 26px; height: 26px; line-height: 26px; border-radius: 13px; font-size: 12px; left: -13px; top: -13px; }
+.touch .code-grid .codes button { padding: 6px 9px; font-size: 13.5px; }
+.touch .codes button.peek { outline: 2px solid var(--accent); outline-offset: 1px; }
+.touch .lit-grid button { padding: 7px 8px; }
+.touch .vtool button { min-width: 38px; min-height: 34px; }

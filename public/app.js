@@ -616,6 +616,11 @@ function step(d) {
 const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
+let LASTPT = TOUCH ? 'touch' : 'mouse';
+const isTouch = () => LASTPT === 'touch' || LASTPT === 'pen';
+const markTouch = () => { if (!document.body.classList.contains('touch')) { document.body.classList.add('touch'); if (S.book) renderPage(); } };
+document.addEventListener('pointerdown', (e) => { LASTPT = e.pointerType || 'mouse'; if (isTouch()) markTouch(); }, true);
+if (TOUCH || (window.matchMedia && matchMedia('(pointer: coarse)').matches)) document.addEventListener('DOMContentLoaded', markTouch);
 document.addEventListener('touchstart', (e) => {
   if (e.target.closest && e.target.closest('[data-code]')) return;
   $('#tip').classList.add('hidden'); S.tipCode = null;
@@ -690,7 +695,7 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${TOUCH ? '1번 누르면 설명 · 2번 누르면 선택' : '여러 개 가능 · 올리면 설명'}</span></div>
+    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '1번 누르면 설명 · 2번 누르면 선택' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
@@ -726,7 +731,7 @@ function renderPanel() {
     };
     b.onclick = () => {
       // 폰(마우스 없음): 처음 누르면 설명, 같은 코드를 한 번 더 누르면 선택
-      if (TOUCH && S.tipCode !== b.dataset.code) {
+      if (isTouch() && S.tipCode !== b.dataset.code) {
         S.tipCode = b.dataset.code;
         P.querySelectorAll('[data-code]').forEach((x) => x.classList.toggle('peek', x === b));
         showTip(); return;
@@ -737,10 +742,8 @@ function renderPanel() {
       setItem(u.id, { codes, code: codes[0] || '' });
     };
     // 마우스를 올리면 버튼 바로 밑에 설명
-    if (!TOUCH) {
-      b.onmouseenter = showTip;
-      b.onmouseleave = () => $('#tip').classList.add('hidden');
-    }
+    b.onmouseenter = () => { if (!isTouch()) showTip(); };
+    b.onmouseleave = () => { if (!isTouch()) $('#tip').classList.add('hidden'); };
   });
   P.querySelectorAll('[data-lit]').forEach((b) => b.onclick = () => setItem(u.id, { lit: it.lit === b.dataset.lit ? '' : b.dataset.lit }));
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
@@ -900,7 +903,36 @@ function bindCoding() {
   const rel = (e) => { const b = stage.getBoundingClientRect(); return [(e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height]; };
   const clamp = (v) => Math.max(0, Math.min(1, v));
 
+  // 터치: 박스는 탭하면 바로 선택, 한 손가락은 기본 스크롤, 두 손가락은 교과서만 확대
+  stage.addEventListener('click', (e) => {
+    if (!isTouch() || S.draw) return;
+    const boxEl = e.target.closest('.box:not(.drawing)');
+    if (boxEl) pick(boxEl.dataset.id, false);
+  });
+  const wrapEl = $('#stageWrap');
+  let pinch = null;
+  const tdist = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  wrapEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    const r = wrapEl.getBoundingClientRect();
+    pinch = { d: tdist(e), z: S.zoom, w: stage.offsetWidth, sl: wrapEl.scrollLeft, st: wrapEl.scrollTop,
+      cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top };
+  }, { passive: false });
+  wrapEl.addEventListener('touchmove', (e) => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const z = Math.max(0.5, Math.min(3, pinch.z * tdist(e) / pinch.d)), k = z / pinch.z;
+    S.zoom = z; stage.style.width = Math.round(pinch.w * k) + 'px';
+    wrapEl.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
+    wrapEl.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
+    $('#zoomLabel').textContent = Math.round(z * 100) + '%';
+  }, { passive: false });
+  wrapEl.addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch = null; });
+  wrapEl.addEventListener('gesturestart', (e) => e.preventDefault());
+
   stage.addEventListener('mousedown', (e) => {
+    if (isTouch()) return;
     const boxEl = e.target.closest('.box:not(.drawing)');
     e.preventDefault();
     if (!S.edit && !S.draw) {
