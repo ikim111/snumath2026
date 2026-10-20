@@ -1055,41 +1055,14 @@ function majority(vals) {
   return best && best[1] >= 2 ? best[0] : '';
 }
 
-// ───────── 비교 화면 ─────────
-const CMP = { level: 'fine', onlyDis: true, kinds: null };
-let finalState = { data: null, etag: null }, finalTimer = null;
 
-async function renderCompare() {
-  const B = $('#compareBody');
-  if (!S.book) { B.innerHTML = '<p class="hint">교과서를 고르세요.</p>'; return; }
-  B.innerHTML = '<p class="hint">불러오는 중…</p>';
-  CMP.kinds ||= [...(S.cfg.defaultKinds || ['main', 'intro'])];
-  const [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`), getStore(`final/${S.book}.json`)]);
-  finalState = { data: finRes.data || { opened: false, items: {} }, etag: finRes.etag };
-  const coders = S.cfg.coders;
-  const statusHtml = coders.map((c) => `<span class="kind ${r.status[c] ? 'main' : ''}">${esc(c)} ${r.status[c] ? '완료' : '진행 중'}</span>`).join(' ');
-
-  if (!r.opened) {
-    B.innerHTML = `<h2>${esc(bookName(S.book))} — 비교·일치율</h2>
-      <p>${statusHtml}</p>
-      <p class="note">세 명 모두 '코딩 완료'를 누르면 이 화면이 열립니다. 그 전에는 서로의 코드를 볼 수 없습니다.</p>
-      <button id="forceOpen">지금 비교 열기</button> <span class="hint">완료하지 않은 사람이 있어도 엽니다. 연 뒤에는 되돌릴 수 없습니다.</span>`;
-    $('#forceOpen').onclick = async () => {
-      if (!confirm('비교를 열면 세 명 모두 서로의 코드를 보게 됩니다. 열까요?')) return;
-      finalState.data.opened = true;
-      const w = await putStore(`final/${S.book}.json`, finalState.data, finalState.etag);
-      if (!w.ok) return toast('저장 충돌 — 다시 시도하세요');
-      renderCompare();
-    };
-    return;
-  }
-
-  const units = S.units.filter((u) => CMP.kinds.includes(u.kind || 'main'));
-  const items = (c) => (r.data[c] && r.data[c].items) || {};
+// 일치율 계산: units(분석 단위), items(코더 → 그 코더의 items), coders
+function agreeStats(units, items, coders) {
   const lv = (code) => levelOf(code, CMP.level);
   const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
   const sameSet = (a, b) => a.join('|') === b.join('|');
-  const cats = categories(CMP.level);
+  // κ를 평균낼 코드: 이 단위들에서 누군가 실제로 고른 코드만 (아무도 안 고른 코드는 κ=1로 잡혀 값을 부풀리므로 뺌)
+  const cats = [...new Set(units.flatMap((u) => coders.flatMap((c) => lvSet(items(c)[u.id]))))];
   // 코드가 여러 개일 수 있어: (1) 완전 일치율 = 고른 코드 묶음이 똑같은 비율, (2) κ = 코드마다 '골랐다/안 골랐다' κ를 구해 평균
   const pairs = [];
   for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) {
@@ -1108,6 +1081,104 @@ async function renderCompare() {
   const tLit = [];
   units.forEach((u) => { const its = coders.map((c) => items(c)[u.id] || {}); if (its.every((x) => x.lit)) tLit.push(its.map((x) => x.lit)); });
   const flLit = fleiss(tLit);
+  return { pairs, fl, flLit };
+}
+
+// 한눈에 보기: 모든 목록의 완료 상태와 일치율. 교과서는 한 권(같은 연도·출판사·학년) 전체 합계 + 단원별
+const OV = { cache: {}, t: 0 };
+async function renderOverview() {
+  const box = $('#cmpOv'); if (!box) return;
+  const coders = S.cfg.coders;
+  const fresh = Date.now() - OV.t < 20000;
+  if (!fresh) {
+    await Promise.all(S.cfg.books.map(async (id) => {
+      try {
+        const [u, r, f] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&all=1`), getStore(`final/${id}.json`)]);
+        OV.cache[id] = { units: (u.data && u.data.units) || [], r, fin: (f.data && f.data.items) || {} };
+      } catch {}
+    }));
+    OV.t = Date.now();
+  }
+  const statOf = (ids) => {
+    const open = ids.filter((id) => OV.cache[id] && OV.cache[id].r.opened);
+    const units = [], itemsBy = Object.fromEntries(coders.map((c) => [c, {}]));
+    let fin = 0, tot = 0;
+    open.forEach((id) => {
+      const o = OV.cache[id]; const us = o.units.filter((x) => CMP.kinds.includes(x.kind || 'main'));
+      us.forEach((x) => { units.push(x); if (codesOf(o.fin[x.id]).length) fin++; });
+      tot += us.length;
+      coders.forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
+    });
+    const st = units.length ? agreeStats(units, (c) => itemsBy[c], coders) : null;
+    return { open: open.length, all: ids.length, st, fin, tot };
+  };
+  const cells = (x) => x.st ? `<td>${x.st.fl.n}</td><td>${pct(x.st.fl.po)}</td><td>${kfmt(x.st.fl.k)} <span class="hint">${kappaWord(x.st.fl.k)}</span></td><td>${kfmt(x.st.flLit.k)} <span class="hint">${kappaWord(x.st.flLit.k)}</span></td><td>${x.fin}/${x.tot}</td>`
+    : `<td colspan="5" class="hint">비교 전</td>`;
+  const done = (id) => { const o = OV.cache[id]; return coders.map((c) => `${c[0]}${o && o.r.status && o.r.status[c] ? '✓' : '·'}`).join(' '); };
+  const meta = (id) => S.metas[id] || {};
+  const rows = [];
+  // 교육과정
+  S.cfg.books.filter((id) => isCur(id)).forEach((id) => rows.push({ id, name: bookName(id), cls: 'ov-main', ...statOf([id]), st2: done(id) }));
+  // 교과서: 한 권씩 묶기
+  const vols = [];
+  S.cfg.books.filter((id) => !isCur(id)).forEach((id) => {
+    const m = meta(id), g = ((m.title || '').match(/중\s?\d/) || [''])[0].replace(/\s/, '');
+    const key = `${m.period || ''} ${m.publisher || ''} ${g}`.trim();
+    let v = vols.find((x) => x.key === key); if (!v) vols.push(v = { key, ids: [] }); v.ids.push(id);
+  });
+  vols.forEach((v) => {
+    rows.push({ id: v.ids[0], name: `${v.key} 전체`, cls: 'ov-main', ...statOf(v.ids), st2: `${v.ids.filter((id) => OV.cache[id] && OV.cache[id].r.opened).length}/${v.ids.length} 단원 열림` });
+    if (v.ids.length > 1) [...v.ids].sort((a, b) => (meta(a).title || a).localeCompare(meta(b).title || b, 'ko', { numeric: true })).forEach((id) => rows.push({ id, name: '　' + ((meta(id).title || id).replace(/^중\s?\d\s*/, '')), cls: 'ov-sub', ...statOf([id]), st2: done(id) }));
+  });
+  box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>
+    <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요. 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
+    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>소양 Fleiss κ</th><th>최종 확정</th></tr>
+    ${rows.map((x) => `<tr class="${x.cls} ${x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" data-ov="${esc(x.id)}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
+    </table></div>`;
+  box.querySelectorAll('[data-ov]').forEach((tr) => tr.onclick = async () => {
+    if (tr.dataset.ov !== S.book) { await selectBook(tr.dataset.ov); fillHeaderBooks(); }
+    renderCompare(); $('#cmpDet').scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+// ───────── 비교 화면 ─────────
+const CMP = { level: 'fine', onlyDis: true, kinds: null };
+let finalState = { data: null, etag: null }, finalTimer = null;
+
+async function renderCompare() {
+  const W = $('#compareBody');
+  if (!$('#cmpOv')) W.innerHTML = '<div id="cmpOv"><p class="hint">한눈에 보기 불러오는 중…</p></div><div id="cmpDet"></div>';
+  renderOverview();
+  const B = $('#cmpDet');
+  if (!S.book) { B.innerHTML = '<p class="hint">위 표에서 목록을 누르면 자세히 볼 수 있어요.</p>'; return; }
+  B.innerHTML = '<p class="hint">불러오는 중…</p>';
+  CMP.kinds ||= [...(S.cfg.defaultKinds || ['main', 'intro'])];
+  const [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`), getStore(`final/${S.book}.json`)]);
+  finalState = { data: finRes.data || { opened: false, items: {} }, etag: finRes.etag };
+  const coders = S.cfg.coders;
+  const statusHtml = coders.map((c) => `<span class="kind ${r.status[c] ? 'main' : ''}">${esc(c)} ${r.status[c] ? '완료' : '진행 중'}</span>`).join(' ');
+
+  if (!r.opened) {
+    B.innerHTML = `<h3 class="det-h">${esc(bookName(S.book))} 자세히</h3>
+      <p>${statusHtml}</p>
+      <p class="note">세 명 모두 '코딩 완료'를 누르면 이 화면이 열립니다. 그 전에는 서로의 코드를 볼 수 없습니다.</p>
+      <button id="forceOpen">지금 비교 열기</button> <span class="hint">완료하지 않은 사람이 있어도 엽니다. 연 뒤에는 되돌릴 수 없습니다.</span>`;
+    $('#forceOpen').onclick = async () => {
+      if (!confirm('비교를 열면 세 명 모두 서로의 코드를 보게 됩니다. 열까요?')) return;
+      finalState.data.opened = true;
+      const w = await putStore(`final/${S.book}.json`, finalState.data, finalState.etag);
+      if (!w.ok) return toast('저장 충돌 — 다시 시도하세요');
+      renderCompare();
+    };
+    return;
+  }
+
+  const units = S.units.filter((u) => CMP.kinds.includes(u.kind || 'main'));
+  const items = (c) => (r.data[c] && r.data[c].items) || {};
+  const lv = (code) => levelOf(code, CMP.level);
+  const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
+  const sameSet = (a, b) => a.join('|') === b.join('|');
+  const { pairs, fl, flLit } = agreeStats(units, items, coders);
 
   const kindBoxes = Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${CMP.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ');
   const levelRadios = [['fine', '세부 코드'], ['basic', '기본 코드'], ['stage', '단계']].map(([k, v]) => `<label><input type="radio" name="lv" value="${k}" ${CMP.level === k ? 'checked' : ''}> ${v}</label>`).join(' ');
@@ -1126,7 +1197,7 @@ async function renderCompare() {
   const m = S.metas[S.book];
   const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
 
-  B.innerHTML = `<h2>${esc(bookName(S.book))} — 비교·일치율</h2>
+  B.innerHTML = `<h3 class="det-h">${esc(bookName(S.book))} 자세히</h3>
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div></div>
     <div class="cards">

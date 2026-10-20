@@ -304,3 +304,12 @@ html, body { overscroll-behavior: none; }
 
 /* 완료함: 다 했어요(초록·깜빡임)와 헷갈리지 않게 연한 바탕 + 초록 글자 */
 .panel-foot .primary.done { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 700; animation: none; }
+
+/* 비교 한눈에 보기 */
+.ov-wrap { overflow-x: auto; margin-bottom: 18px; }
+table.ov tr[data-ov] { cursor: pointer; }
+table.ov tr[data-ov]:hover td { background: #f7f6f2; }
+table.ov tr.ov-main td { font-weight: 600; }
+table.ov tr.ov-sub td { font-size: 12px; color: var(--muted); }
+table.ov tr.on td { background: var(--accent-soft); }
+.det-h { border-top: 2px solid var(--line); padding-top: 14px; }
