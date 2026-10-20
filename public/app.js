@@ -221,6 +221,25 @@ function where(bookId, u) {
   if (m.type === 'curriculum') return `${u.std || ''} ${u.task || ''}`.trim();
   return m.pages[u.page] ? m.pages[u.page].label + '쪽' : '';
 }
+// 내용 요소: 박스에 직접 정한 값(u.ce)이 있으면 그것, 없으면 발문 요약·성취기준으로 자동
+const CE_RULES = [
+  ['줄기와 잎 그림', /줄기|잎/], ['도수분포다각형', /다각형/], ['히스토그램', /히스토그램/], ['상대도수', /상대도수/],
+  ['도수분포표', /도수분포표|계급|도수분포/], ['상자그림', /상자그림|사분위/], ['산점도·상관관계', /산점도|상관/],
+  ['산포도', /분산|표준편차|편차|산포/], ['대푯값', /평균|중앙값|최빈값|대푯값/],
+  ['통계적 탐구', /탐구 문제|프로젝트|포스터|통계적 문제해결|조사 주제|자료를 수집|자료 수집|조사.*계획/],
+];
+const CE_BY_STD = {
+  '9수04-01': '대푯값', '9수04-02': '도수분포표', '9수04-03': '상대도수', '9수04-04': '통계적 탐구', '9수04-07': '산포도', '9수04-08': '상자그림', '9수04-09': '산점도·상관관계',
+  '9수05-01': '도수분포표', '9수05-02': '상대도수', '9수05-03': '통계적 탐구', '9수05-06': '대푯값', '9수05-07': '산포도', '9수05-08': '산점도·상관관계',
+  '도수분포와 그래프': '도수분포표', '대푯값과 산포도': '대푯값',
+};
+function autoCE(u) {
+  const t = `${u.summary || ''} ${u.task || ''}`;
+  const hit = CE_RULES.filter(([, re]) => re.test(t)).map(([k]) => k);
+  if (hit.length) return hit;
+  return CE_BY_STD[u.std] ? [CE_BY_STD[u.std]] : ['기타'];
+}
+const unitCE = (u) => (u && Array.isArray(u.ce) && u.ce.length ? u.ce : autoCE(u || {}));
 const isDone = (it) => !!(it && it.code && it.lit); // 필수 두 가지를 모두 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
@@ -588,6 +607,8 @@ function renderPanel() {
         <label>위치</label><select data-f="pos">${opt(S.cfg.positions, u.pos)}</select>
         <label>성취기준</label><select data-f="std">${opt([...new Set([...S.units.map((x) => x.std).filter(Boolean), ...S.cfg.stdList])], u.std)}</select>
       </div>`}
+      <div class="meta-ce"><span class="hint">내용 요소 ${Array.isArray(u.ce) && u.ce.length ? '' : '(자동)'}</span>
+        <div class="chips">${S.cfg.contentElements.map((c) => `<button data-uce="${esc(c)}" class="${unitCE(u).includes(c) ? 'on' : ''}">${esc(c)}</button>`).join('')}</div></div>
       <div class="unit-tools">
         <button id="uSplit" title="한 발문에 행동이 여럿일 때 같은 자리에 행을 하나 더 만듭니다">행 나누기</button>
         ${isCur() ? '<button id="uAdd">아래에 문장 추가</button>' : ''}
@@ -602,13 +623,15 @@ function renderPanel() {
     ${it.code ? `<div class="code-desc">${codeHelp(it.code)}</div>` : ''}
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">이 유형은 선택</span>'}<span class="hint step-hint">하나만</span></div>
     <div class="chips lit">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
-    <div class="step light">내용 요소 <span class="opt">선택</span></div>
-    <div class="chips">${S.cfg.contentElements.map((c) => `<button data-ce="${esc(c)}" class="${(it.ce || []).includes(c) ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
     <div class="step light">메모 <span class="opt">선택</span></div>
     <textarea id="cMemo" rows="2" placeholder="판단 근거나 헷갈린 점 (비교할 때 조원에게 보여요)">${esc(it.memo)}</textarea>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
   `;
   P.querySelector('.meta-box').ontoggle = (e) => { S.metaOpen = e.target.open; };
+  P.querySelectorAll('[data-uce]').forEach((b) => b.onclick = () => {
+    const ce = new Set(unitCE(u)); ce.has(b.dataset.uce) ? ce.delete(b.dataset.uce) : ce.add(b.dataset.uce);
+    u.ce = [...ce]; markDirty(u); renderPanel();
+  });
   if ($('#goNext')) $('#goNext').onclick = goNextTodo;
 
   $('#uPrev').onclick = () => step(-1);
@@ -633,10 +656,6 @@ function renderPanel() {
       t.style.top = (r.bottom + 6) + 'px';
     };
     b.onmouseleave = () => $('#tip').classList.add('hidden');
-  });
-  P.querySelectorAll('[data-ce]').forEach((b) => b.onclick = () => {
-    const ce = new Set(it.ce || []); ce.has(b.dataset.ce) ? ce.delete(b.dataset.ce) : ce.add(b.dataset.ce);
-    setItem(u.id, { ce: [...ce] });
   });
   P.querySelectorAll('[data-lit]').forEach((b) => b.onclick = () => setItem(u.id, { lit: it.lit === b.dataset.lit ? '' : b.dataset.lit }));
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
@@ -864,7 +883,7 @@ function exportCSV(bookId, coderLabel, items, filename, kinds = null) {
   units.forEach((u) => {
     if (kinds && !kinds.includes(u.kind || 'main')) return;
     const it = items[u.id] || {};
-    rows.push([bookId, where(bookId, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.lit || '', coderLabel, it.memo, KINDS[u.kind || 'main'], u.id]);
+    rows.push([bookId, where(bookId, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', coderLabel, it.memo, KINDS[u.kind || 'main'], u.id]);
   });
   download(filename, toCSV(rows));
 }
@@ -1012,7 +1031,6 @@ async function renderCompare() {
     const f = finalState.data.items[id] || {};
     // 처음 정할 때 내용요소·비판·소통은 다수결로 함께 채움
     const patch = { code: el.value };
-    if (!f.ce) patch.ce = S.cfg.contentElements.filter((ce) => its.filter((x) => (x.ce || []).includes(ce)).length >= 2);
     if (f.lit === undefined) patch.lit = majority(its.map((x) => x.lit));
     setFin(id, patch);
   });
@@ -1026,7 +1044,6 @@ async function renderCompare() {
       if (!mj) return;
       finalState.data.items[u.id] = {
         ...(finalState.data.items[u.id] || {}), code: mj,
-        ce: S.cfg.contentElements.filter((ce) => its.filter((x) => (x.ce || []).includes(ce)).length >= 2),
         lit: majority(its.map((x) => x.lit)),
       };
       n++;
@@ -1040,7 +1057,7 @@ async function renderCompare() {
     const rows = [head];
     [...coders, '최종'].forEach((c) => {
       const its = c === '최종' ? fin : items(c);
-      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.lit || '', c, it.memo, KINDS[u.kind || 'main'], u.id]); });
+      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', c, it.memo, KINDS[u.kind || 'main'], u.id]); });
     });
     download(`${S.book}_세명코딩.csv`, toCSV(rows));
   };
@@ -1095,7 +1112,7 @@ async function renderStats() {
 
   const stageCats = categories('stage');
   const ces = S.cfg.contentElements;
-  const ceCount = (ce, c) => recs.filter((r) => (r.it.ce || []).includes(ce) && levelOf(r.it.code, 'stage') === c).length;
+  const ceCount = (ce, c) => recs.filter((r) => unitCE(r.u).includes(ce) && levelOf(r.it.code, 'stage') === c).length;
 
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
   B.innerHTML = `<h2>통계표</h2>
@@ -1119,9 +1136,9 @@ async function renderStats() {
     <h3>내용 요소 × 단계</h3>
     <table class="t"><tr><th class="l">내용 요소</th>${stageCats.map((c) => `<th>${esc(c)}</th>`).join('')}<th>합계</th></tr>
       ${ces.map((ce) => { const row = stageCats.map((c) => ceCount(ce, c)); const s = row.reduce((a, b) => a + b, 0); return s ? `<tr><td class="l">${esc(ce)}</td>${row.map((v) => `<td>${v || ''}</td>`).join('')}<td><b>${s}</b></td></tr>` : ''; }).join('')}
-      <tr><td class="l hint">내용 요소 없음</td>${stageCats.map((c) => `<td>${recs.filter((r) => !(r.it.ce || []).length && levelOf(r.it.code, 'stage') === c).length || ''}</td>`).join('')}<td>${recs.filter((r) => !(r.it.ce || []).length).length}</td></tr>
+      <tr><td class="l hint">내용 요소 없음</td>${stageCats.map((c) => `<td>${recs.filter((r) => !unitCE(r.u).length && levelOf(r.it.code, 'stage') === c).length || ''}</td>`).join('')}<td>${recs.filter((r) => !unitCE(r.u).length).length}</td></tr>
     </table>
-    <p class="note">한 단위에 내용 요소를 여러 개 고른 경우 각 요소에 한 번씩 셉니다.</p>
+    <p class="note">내용 요소는 박스의 발문 요약·성취기준으로 자동으로 정해집니다(박스 정보에서 고칠 수 있음). 여러 개인 단위는 각 요소에 한 번씩 셉니다.</p>
     <h3>통계적 소양</h3>
     <table class="t"><tr><th class="l">구분</th><th>단위 수</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th></tr>
       ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); return `<tr><td class="l">${esc(g)}</td><td>${rs.length}</td>${litList().map((l) => { const c = rs.filter((r) => r.it.lit === l).length; return `<td>${c} <span class="hint">(${pct(c / rs.length)})</span></td>`; }).join('')}<td>${rs.filter((r) => !r.it.lit).length}</td></tr>`; }).join('')}
@@ -1144,7 +1161,7 @@ async function renderStats() {
   $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
   $('#stCsvRec').onclick = () => {
     const rows = [['교과서ID', '쪽', '성취기준', '위치', '과제번호', '발문요약', '코드', '내용요소', '소양', '코더', '메모', '유형', '단위ID', '시기', '출판사']];
-    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.std, u.pos, u.task, u.summary, it.code, (it.ce || []).join(';'), it.lit || '', ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.id, period, publisher]));
+    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.std, u.pos, u.task, u.summary, it.code, unitCE(u).join(';'), it.lit || '', ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.id, period, publisher]));
     download('코딩기록.csv', toCSV(rows));
   };
 }
