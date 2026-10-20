@@ -217,7 +217,7 @@ function codeList() {
   const out = [];
   fw().forEach((c) => {
     const L = c.stage[0];
-    if (L !== 'X' && !out.some((x) => x.code === L)) out.push({ stage: c.stage, code: L, name: '단계만', desc: `하위 활동이 적혀 있지 않은 동사는 큰 단계까지만 (예: "분석하고" → R)`, def: '' });
+    if (L !== 'X' && !out.some((x) => x.code === L)) out.push({ stage: c.stage, code: L, name: '', desc: `하위 활동이 적혀 있지 않은 동사는 큰 단계까지만 (예: "분석하고" → R)`, def: '' });
     out.push(c);
   });
   return out;
