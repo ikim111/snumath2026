@@ -299,3 +299,5 @@ html, body { overscroll-behavior: none; }
 .touch .codes button.peek { outline: 2px solid var(--accent); outline-offset: 1px; }
 .touch .lit-grid button { padding: 7px 8px; }
 .touch .vtool button { min-width: 38px; min-height: 34px; }
+
+.touch .codes button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

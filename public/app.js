@@ -700,7 +700,7 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
+    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
@@ -734,13 +734,21 @@ function renderPanel() {
       t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
       t.style.top = (r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
     };
+    // 터치: 꾸욱(0.5초) 누르면 설명만 보고 선택은 안 함
+    let lp = null;
+    b.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      b.dataset.lp = '';
+      lp = setTimeout(() => { b.dataset.lp = '1'; showTip(); }, 500);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(lp)));
+    b.oncontextmenu = (e) => e.preventDefault();
     b.onclick = () => {
+      if (b.dataset.lp === '1') { b.dataset.lp = ''; return; }
       const set = new Set(codesOf(it)); set.has(b.dataset.code) ? set.delete(b.dataset.code) : set.add(b.dataset.code);
       const order = codeList().map((c) => c.code); const codes = [...set].sort((a, c) => order.indexOf(a) - order.indexOf(c));
       const code = b.dataset.code;
       setItem(u.id, { codes, code: codes[0] || '' });
-      // 터치: 한 번 누르면 바로 선택되고, 설명도 같이 보여 줌(다른 곳을 누르면 사라짐)
-      if (isTouch()) { const nb = $(`#unitPanel [data-code="${code}"]`); if (nb) showTip(nb); }
     };
     // 마우스를 올리면 버튼 바로 밑에 설명
     b.onmouseenter = () => { if (!isTouch()) showTip(); };
