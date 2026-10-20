@@ -615,11 +615,23 @@ function step(d) {
 }
 const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
 
+const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
+document.addEventListener('touchstart', (e) => {
+  if (e.target.closest && e.target.closest('[data-code]')) return;
+  $('#tip').classList.add('hidden'); S.tipCode = null;
+  document.querySelectorAll('[data-code].peek').forEach((x) => x.classList.remove('peek'));
+}, { passive: true });
 function renderPanel() {
-  $('#tip').classList.add('hidden');
+  $('#tip').classList.add('hidden'); S.tipCode = null;
   const u = unitById(S.sel);
   const P = $('#unitPanel');
   if (!S.book) { P.innerHTML = '<p class="hint">설정 탭에서 교과서를 먼저 등록하세요.</p>'; return; }
+  if (!u && window.innerWidth <= 760 && S.units.length && !renderPanel.auto) {
+    // 폰: 목록이 안 보이니 남은 단위 하나를 바로 고름
+    renderPanel.auto = true;
+    const n = S.units.find((x) => isRequired(x) && !isDone(S.mine.items[x.id])) || S.units[0];
+    select(n.id); renderPanel.auto = false; return;
+  }
   if (!u) {
     P.innerHTML = `<p class="hint">왼쪽 쪽 이미지에서 박스를 누르거나, 아래 목록에서 분석 단위를 고르세요.<br><br>
       <b>단축키</b> ↓ 또는 J: 다음 단위 · ↑ 또는 K: 이전 단위${S.edit ? ' · Delete: 박스 삭제' : ''}</p>`;
@@ -678,7 +690,7 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">여러 개 가능 · 올리면 설명</span></div>
+    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${TOUCH ? '1번 누르면 설명 · 2번 누르면 선택' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
@@ -705,20 +717,30 @@ function renderPanel() {
   if ($('#uAdd')) $('#uAdd').onclick = () => addCurUnit(u);
   if (!canCode) return;
   P.querySelectorAll('[data-code]').forEach((b) => {
+    const showTip = () => {
+      const t = $('#tip'), r = b.getBoundingClientRect();
+      t.innerHTML = codeHelp(b.dataset.code); t.classList.remove('hidden');
+      const w = t.offsetWidth, h = t.offsetHeight;
+      t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
+      t.style.top = (r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+    };
     b.onclick = () => {
+      // 폰(마우스 없음): 처음 누르면 설명, 같은 코드를 한 번 더 누르면 선택
+      if (TOUCH && S.tipCode !== b.dataset.code) {
+        S.tipCode = b.dataset.code;
+        P.querySelectorAll('[data-code]').forEach((x) => x.classList.toggle('peek', x === b));
+        showTip(); return;
+      }
+      S.tipCode = null;
       const set = new Set(codesOf(it)); set.has(b.dataset.code) ? set.delete(b.dataset.code) : set.add(b.dataset.code);
       const order = codeList().map((c) => c.code); const codes = [...set].sort((a, c) => order.indexOf(a) - order.indexOf(c));
       setItem(u.id, { codes, code: codes[0] || '' });
     };
     // 마우스를 올리면 버튼 바로 밑에 설명
-    b.onmouseenter = () => {
-      const t = $('#tip'), r = b.getBoundingClientRect();
-      t.innerHTML = codeHelp(b.dataset.code); t.classList.remove('hidden');
-      const w = t.offsetWidth;
-      t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
-      t.style.top = (r.bottom + 6) + 'px';
-    };
-    b.onmouseleave = () => $('#tip').classList.add('hidden');
+    if (!TOUCH) {
+      b.onmouseenter = showTip;
+      b.onmouseleave = () => $('#tip').classList.add('hidden');
+    }
   });
   P.querySelectorAll('[data-lit]').forEach((b) => b.onclick = () => setItem(u.id, { lit: it.lit === b.dataset.lit ? '' : b.dataset.lit }));
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);

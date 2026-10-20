@@ -250,3 +250,38 @@ table.t tr.dis td.fin { background: #fff; }
 .lit-grid button b .lm { margin: 0 3px 0 0; }
 .lit-grid button span.lm, .lit-grid button.on span.lm { color: #fff; font-size: 11px; }
 .lit-grid button span.lm-x, .lit-grid button.on span.lm-x { color: #7a7870; }
+
+/* 폰 화면: 위에 교과서 쪽, 아래에 코드 패널. 박스 수정 도구는 숨김(노트북에서) */
+@media (max-width: 760px) {
+  body { height: 100dvh; }
+  .top { gap: 6px 8px; padding: 6px 8px; }
+  .brand { display: none; }
+  .top .sel { font-size: 0; gap: 0; }
+  .top .sel select { font-size: 13px; padding: 3px 4px; width: 58vw; }
+  #coderSel { width: 24vw; }
+  .help { margin-left: auto; }
+  .tabs { margin-left: 0; flex: 1 0 calc(100% - 110px); order: 5; overflow-x: auto; }
+  .tabs button { padding: 5px 9px; white-space: nowrap; }
+  .save { font-size: 11px; order: 6; margin-left: 0; }
+  .code-layout, .code-layout.cur { grid-template-columns: 1fr; grid-template-rows: 42% 58%; }
+  .pages, .code-layout.cur .pages { display: none; }
+  .panel { border-left: 0; border-top: 2px solid var(--line); }
+  #unitPanel { max-height: none; flex: 1; padding: 8px 10px; }
+  .unit-list { display: none; }
+  .unit-list-head { padding: 4px 10px; }
+  .panel-foot { padding: 6px 10px; }
+  #addBox, .vtool .toggle, #editHelp, .unit-tools { display: none !important; }
+  .vtool { gap: 6px; padding: 4px 8px; }
+  .stage-wrap { padding: 6px; }
+  .code-grid .codes button { padding: 6px 9px; font-size: 13.5px; }
+  .codes button.peek { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .lit-grid button { padding: 7px 8px; }
+  .next-row { bottom: -8px; }
+  .tipbox { max-width: calc(100vw - 16px); }
+  .tour-card { width: calc(100vw - 20px); max-width: 330px; }
+  .gate-card { width: calc(100vw - 32px); }
+  .cur-view { padding: 8px; }
+  .crow { grid-template-columns: 30px 1fr 64px; padding: 8px 10px; }
+  .crow .kind { display: none; }
+  .pad { padding: 12px; }
+}
