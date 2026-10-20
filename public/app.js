@@ -755,10 +755,7 @@ function renderPanel() {
     b.onmouseleave = () => { if (!isTouch()) $('#tip').classList.add('hidden'); };
   });
   P.querySelectorAll('[data-lit]').forEach((b) => b.onclick = () => {
-    const wasDone = isDone(it);
     setItem(u.id, { lit: it.lit === b.dataset.lit ? '' : b.dataset.lit });
-    // 코드 고르고 소양까지 고르면 다음 안 한 단위로 자동 이동(이미 다 한 단위를 고칠 때는 그대로)
-    if (!wasDone && isDone(S.mine.items[u.id])) setTimeout(() => { if (S.sel === u.id) goNextTodo(); }, 350);
   });
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
 }
