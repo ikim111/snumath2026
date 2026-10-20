@@ -616,11 +616,16 @@ function step(d) {
 const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
-let LASTPT = TOUCH ? 'touch' : 'mouse';
+const HASTOUCH = TOUCH || (navigator.maxTouchPoints || 0) > 0; // 아이패드는 키보드·트랙패드가 붙으면 hover가 있다고 나옴
+let LASTPT = HASTOUCH ? 'touch' : 'mouse';
 const isTouch = () => LASTPT === 'touch' || LASTPT === 'pen';
 const markTouch = () => { if (!document.body.classList.contains('touch')) { document.body.classList.add('touch'); if (S.book) renderPage(); } };
-document.addEventListener('pointerdown', (e) => { LASTPT = e.pointerType || 'mouse'; if (isTouch()) markTouch(); }, true);
-if (TOUCH || (window.matchMedia && matchMedia('(pointer: coarse)').matches)) document.addEventListener('DOMContentLoaded', markTouch);
+document.addEventListener('pointerdown', (e) => {
+  const was = isTouch(); LASTPT = e.pointerType || 'mouse';
+  if (isTouch()) markTouch();
+  if (was !== isTouch() && S.book) setTimeout(renderPanel, 0); // 안내 문구 바꾸기
+}, true);
+if (HASTOUCH || (window.matchMedia && matchMedia('(pointer: coarse)').matches)) document.addEventListener('DOMContentLoaded', markTouch);
 document.addEventListener('touchstart', (e) => {
   if (e.target.closest && e.target.closest('[data-code]')) return;
   $('#tip').classList.add('hidden'); S.tipCode = null;
