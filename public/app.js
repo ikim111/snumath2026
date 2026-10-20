@@ -324,8 +324,9 @@ async function init() {
     const fresh = DEFAULT_CFG().frameworks['전혜원·김래영2019'];
     const cur = (S.cfg.frameworks || {})['전혜원·김래영2019'] || [];
     const sig = (list) => list.map((x) => `${x.code}:${x.name}:${x.desc}:${x.def || ''}`).join('|');
-    if (sig(cur) !== sig(fresh)) {
-      const next = { ...S.cfg, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh } };
+    // fwVersion은 기본값에 넣지 않음 → 한 번 갱신한 뒤 설정에서 고친 내용은 덮어쓰지 않음
+    if ((raw.fwVersion || 0) < 6 && sig(cur) !== sig(fresh)) {
+      const next = { ...S.cfg, fwVersion: 6, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh } };
       const r = await putStore('config/app.json', next, S.cfgEtag);
       if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
     }
