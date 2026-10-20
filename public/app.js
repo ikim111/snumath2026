@@ -296,6 +296,7 @@ async function init() {
   saveState('불러오는 중…');
   const c = await getStore('config/app.json');
   let needV2 = false;
+  const raw = c.data || {}; // 저장된 값 그대로 (기본값과 섞기 전)
   if (c.data) {
     needV2 = !c.data.v2;
     S.cfg = { ...DEFAULT_CFG(), ...c.data }; S.cfgEtag = c.etag;
@@ -318,19 +319,18 @@ async function init() {
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
   }
-  if (!S.cfg.v5) {
-    const fresh = DEFAULT_CFG();
-    const next = { ...S.cfg, v4: true, v5: true, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
-    const r = await putStore('config/app.json', next, S.cfgEtag);
-    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+  // 저장된 전혜원·김래영 분석틀이 최신(조 코딩 규칙 문구 + X 해당 없음)이 아니면 새로 씀 — 내용으로 판단
+  {
+    const fresh = DEFAULT_CFG().frameworks['전혜원·김래영2019'];
+    const cur = (S.cfg.frameworks || {})['전혜원·김래영2019'] || [];
+    const sig = (list) => list.map((x) => `${x.code}:${x.name}:${x.desc}:${x.def || ''}`).join('|');
+    if (sig(cur) !== sig(fresh)) {
+      const next = { ...S.cfg, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh } };
+      const r = await putStore('config/app.json', next, S.cfgEtag);
+      if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+    }
   }
-  if (!S.cfg.v4) {
-    const fresh = DEFAULT_CFG();
-    const next = { ...S.cfg, v4: true, frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
-    const r = await putStore('config/app.json', next, S.cfgEtag);
-    if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
-  }
-  if (S.cfg.books.includes('T0') && !S.cfg.v3) {
+  if (S.cfg.books.includes('T0')) {
     const next = { ...S.cfg, books: S.cfg.books.filter((x) => x !== 'T0'), v3: true };
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
