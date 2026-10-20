@@ -83,6 +83,10 @@ const JK_TIPS = {
   R3: '표·그래프·분포의 특징을 물으면 R3, 그 특징을 근거로 집단·상황에 대한 질문에 답하면 I1. 예) "30회 이상인 학생은 어느 반이 더 많은가?" → R3',
   I1: '특징을 근거로 집단·상황에 답하면 I1(예: "어느 반이 더 잘한다고 할 수 있는가?"). 학생이 결론을 내리면 I1, 이미 나온 결론을 따지면 I2',
   I2: '학생이 결론을 내리면 I1, 이미 나온 결론을 따지면 I2. 표본의 대표성을 따지는 문항(예: "10명에게만 물은 결과를 믿을 수 있나?")도 I2',
+  F: '교육과정 전용. 문제 설정에 관한 동사인데 F1·F2 중 무엇인지 적혀 있지 않을 때',
+  P: '교육과정 전용. 자료 수집에 관한 동사인데 P1·P2 중 무엇인지 적혀 있지 않을 때',
+  R: '교육과정 전용. "분석하고"처럼 R1·R2·R3 중 무엇인지 적혀 있지 않을 때. 집계에서 R 단계 합계에 들어감',
+  I: '교육과정 전용. 해석에 관한 동사인데 I1·I2 중 무엇인지 적혀 있지 않을 때',
 };
 const LIT_DESC = {
   '통계·수학적 지식의 절차적 활용': '배운 지식으로 계산·그리기·읽기',
@@ -208,7 +212,15 @@ function basicCodes() {
   return out.map((o) => ({ stage: o.stage, code: o.code, name: o.names.join('/'), desc: o.descs.join(' / ') }));
 }
 function codeList() {
-  return fw(); // 10/20 결정: 교육과정도 교과서와 같은 2차 코드까지
+  // 교과서: 2차 코드까지. 교육과정: 하위 활동이 안 적힌 동사를 위해 큰 단계(F·P·R·I)만 고르는 선택지도
+  if (!isCur()) return fw();
+  const out = [];
+  fw().forEach((c) => {
+    const L = c.stage[0];
+    if (L !== 'X' && !out.some((x) => x.code === L)) out.push({ stage: c.stage, code: L, name: '단계만', desc: `하위 활동이 적혀 있지 않은 동사는 큰 단계까지만 (예: "분석하고" → R)`, def: '' });
+    out.push(c);
+  });
+  return out;
 }
 function codeListBasicLegacy() {
   const list = basicCodes(), stages = [];
@@ -225,7 +237,7 @@ function levelOf(code, level) {
 }
 function categories(level) {
   const seen = [];
-  fw().forEach((c) => { const k = levelOf(c.code, level); if (!seen.includes(k)) seen.push(k); });
+  codeList().forEach((c) => { const k = levelOf(c.code, level); if (!seen.includes(k)) seen.push(k); });
   return seen;
 }
 const stageColor = (code) => {
