@@ -301,3 +301,6 @@ html, body { overscroll-behavior: none; }
 .touch .vtool button { min-width: 38px; min-height: 34px; }
 
 .touch .codes button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* 완료함: 다 했어요(초록·깜빡임)와 헷갈리지 않게 연한 바탕 + 초록 글자 */
+.panel-foot .primary.done { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 700; animation: none; }

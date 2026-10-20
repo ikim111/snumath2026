@@ -384,12 +384,9 @@ async function loadMetas() {
 function bookLabel(id) {
   const m = S.metas[id] || {}, pg = S.prog[id];
   const name = isCur(id) ? bookName(id) : `${m.publisher || ''} ${m.title || id}`.trim();
-  if (pg && pg.total && pg.by) {
-    // 세 명 진행률: 조12 이0 김19✓ /19  (✓ = 코딩 완료 누름)
-    const who = S.cfg.coders.map((c) => { const b = pg.by[c] || { n: 0 }; const n = c === S.coder && pg.done != null ? pg.done : b.n; return `${c[0]}${n}${b.fin ? '✓' : ''}`; }).join(' ');
-    return `${name}  (${who} /${pg.total})`;
-  }
-  return name + (pg && pg.total ? (pg.done >= pg.total ? '  ✓' : `  (${pg.done}/${pg.total})`) : '');
+  // 내 것만: 완료 누르면 '✓ 완료', 아니면 (한 개수/전체)
+  const fin = pg && pg.by && pg.by[S.coder] && pg.by[S.coder].fin;
+  return name + (pg && pg.total ? (fin ? '  ✓ 완료' : `  (${pg.done}/${pg.total})`) : '');
 }
 function updateBookOption(id) { const o = document.querySelector(`#bookSel option[value="${CSS.escape(id)}"]`); if (o) o.textContent = bookLabel(id); }
 // 목록마다 내 진행률을 뒤에서 조용히 불러옴
@@ -788,7 +785,7 @@ function renderDone() {
   const b = $('#doneBtn');
   b.disabled = !S.coder || !S.book;
   const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
-  b.textContent = S.mine.done ? '✓ 코딩 완료 (누르면 취소)' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
+  b.textContent = S.mine.done ? '✓ 완료함 (다시 누르면 취소)' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
   b.classList.toggle('ready', !S.mine.done && !left && S.units.length > 0);
   b.classList.toggle('done', !!S.mine.done);
 }
@@ -897,7 +894,7 @@ function bindCoding() {
       if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
     S.mine.done = !S.mine.done; renderDone(); await saveMine();
-    { const pg = S.prog[S.book]; if (pg && pg.by && pg.by[S.coder]) { pg.by[S.coder].fin = S.mine.done; updateBookOption(S.book); } }
+    { const pg = S.prog[S.book]; if (pg) { pg.by = pg.by || {}; pg.by[S.coder] = { ...(pg.by[S.coder] || {}), fin: S.mine.done }; updateBookOption(S.book); } }
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
   };
   $('#exportMine').onclick = () => exportCSV(S.book, S.coder, S.mine.items, `${S.book}_${S.coder}_코딩.csv`);
