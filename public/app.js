@@ -383,7 +383,7 @@ async function loadMetas() {
 }
 function bookLabel(id) {
   const m = S.metas[id] || {}, pg = S.prog[id];
-  const name = isCur(id) ? bookName(id) : `${m.publisher || ''} ${m.title || id}`.trim();
+  const name = isCur(id) ? bookName(id) : `${m.period || ''} ${m.title || id}`.trim(); // 출판사는 묶음 제목에 있음
   // 내 것만: 완료 누르면 '✓ 완료', 아니면 (한 개수/전체)
   const fin = pg && pg.by && pg.by[S.coder] && pg.by[S.coder].fin;
   return name + (pg && pg.total ? (fin ? '  ✓ 완료' : `  (${pg.done}/${pg.total})`) : '');
@@ -415,12 +415,16 @@ fillHeader.books = function () {
   const groups = [];
   S.cfg.books.forEach((id) => {
     const m = S.metas[id] || {};
-    const g = isCur(id) ? '교육과정' : `${m.period || ''} 교과서`;
+    // 두 가지 틀: (1) 교육과정 (2) 출판사별 교과서
+    const g = isCur(id) ? '교육과정' : (m.publisher || '기타');
     let x = groups.find((y) => y.g === g); if (!x) groups.push(x = { g, ids: [] }); x.ids.push(id);
   });
-  groups.sort((a, b) => (a.g === '교육과정' ? -1 : b.g === '교육과정' ? 1 : a.g.localeCompare(b.g)));
-  groups.forEach((x) => x.ids.sort((a, b) => ((S.metas[a] || {}).title || a).localeCompare((S.metas[b] || {}).title || b, 'ko', { numeric: true })));
-  $('#bookSel').innerHTML = groups.map((x) => `<optgroup label="${esc(x.g)}">${x.ids.map((id) => `<option value="${esc(id)}">${esc(bookLabel(id))}</option>`).join('')}</optgroup>`).join('') || '<option value="">(목록 없음)</option>';
+  const ORDER = ['교육과정', '미래엔', '비상교육', '동아(강)'];
+  const rank = (g) => (ORDER.indexOf(g) < 0 ? 99 : ORDER.indexOf(g));
+  groups.sort((a, b) => rank(a.g) - rank(b.g) || a.g.localeCompare(b.g));
+  const key = (id) => { const m = S.metas[id] || {}; return `${m.period || ''} ${m.title || id}`; };
+  groups.forEach((x) => x.ids.sort((a, b) => key(a).localeCompare(key(b), 'ko', { numeric: true })));
+  $('#bookSel').innerHTML = groups.map((x) => `<optgroup label="${esc(x.g === '교육과정' ? '① 교육과정' : '② ' + x.g)}">${x.ids.map((id) => `<option value="${esc(id)}">${esc(bookLabel(id))}</option>`).join('')}</optgroup>`).join('') || '<option value="">(목록 없음)</option>';
 };
 fillHeader.coders = function () {
   const saved = ls.get('coder');
