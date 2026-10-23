@@ -710,12 +710,15 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
+    ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
+    <div class="${S.mine.done ? 'locked' : ''}">
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
     <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
-    <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점">${esc(it.memo)}</textarea>
+    <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점" ${S.mine.done ? 'disabled' : ''}>${esc(it.memo)}</textarea>
+    </div>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
   `;
   P.querySelector('.meta-box').ontoggle = (e) => { S.metaOpen = e.target.open; };
@@ -791,7 +794,7 @@ function renderDone() {
   const b = $('#doneBtn');
   b.disabled = !S.coder || !S.book;
   const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
-  b.textContent = S.mine.done ? '✓ 완료함 (다시 누르면 취소)' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
+  b.textContent = S.mine.done ? '✓ 완료함 · 누르면 완료 취소' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
   b.classList.toggle('ready', !S.mine.done && !left && S.units.length > 0);
   b.classList.toggle('done', !!S.mine.done);
 }
@@ -799,6 +802,7 @@ function renderDone() {
 // ───────── 내 코딩 저장 ─────────
 let mineTimer = null;
 function setItem(id, patch, rerender = true) {
+  if (S.mine.done) { toast("완료한 목록이에요. 고치려면 오른쪽 아래 '완료 취소'를 먼저 누르세요."); return; }
   const cur = S.mine.items[id] || {};
   S.mine.items[id] = { ...cur, ...patch, t: Date.now() };
   scheduleMine();
@@ -899,7 +903,7 @@ function bindCoding() {
       const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
       if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
-    S.mine.done = !S.mine.done; renderDone(); await saveMine();
+    S.mine.done = !S.mine.done; renderDone(); renderPanel(); await saveMine();
     { const pg = S.prog[S.book]; if (pg) { pg.by = pg.by || {}; pg.by[S.coder] = { ...(pg.by[S.coder] || {}), fin: S.mine.done }; updateBookOption(S.book); } }
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
   };
