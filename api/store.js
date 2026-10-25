@@ -2,7 +2,7 @@
 // 개인 코딩(codings/)은 여기서 읽을 수 없음 → 비교 전 서로의 코드가 보이지 않게
 import { authed, deny, json, safePath, readJSON, writeJSON, readBody } from './_lib.js';
 
-const ALLOWED = [/^config\/[\w\-가-힣]+\.json$/, /^books\/[\w\-]+\/(meta|units)\.json$/, /^final\/[\w\-]+\.json$/, /^curriculum\/[\w\-가-힣]+\.json$/];
+const ALLOWED = [/^config\/[\w\-가-힣]+\.json$/, /^books\/[\w\-]+\/(meta|units)\.json$/, /^final\/[\w\-]+\.json$/, /^curriculum\/[\w\-가-힣]+\.json$/, /^backup\/[\w\-]+\.json$/]; // backup/: 전체 백업(기능 바꾸기 전)
 const ok = (p) => p && ALLOWED.some((re) => re.test(p));
 
 export async function GET(req) {
