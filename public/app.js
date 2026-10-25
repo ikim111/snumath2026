@@ -89,10 +89,10 @@ const JK_TIPS = {
   I: '교육과정 전용. 해석에 관한 동사인데 I1·I2 중 무엇인지 적혀 있지 않을 때',
 };
 const LIT_DESC = {
-  '통계·수학적 지식의 절차적 활용': '배운 지식으로 계산·그리기·읽기',
+  '통계·수학적 지식의 절차적 활용': '통계 지식 적용(통계적 문제 판단·수집 방법·표현·계산·용어·의미)',
   '비판적 평가': '주장·결론·그래프·자료를 따지기',
   '의사소통': '설명·발표·토론이 활동의 중심일 때',
-  '해당 없음': '어느 소양에도 해당하지 않음',
+  '해당 없음': '세 요소 모두 해당하지 않음',
 };
 function codeHelp(code) {
   const c = codeList().find((x) => x.code === code);
@@ -284,19 +284,24 @@ function autoCE(u) {
 const unitCE = (u) => (u && Array.isArray(u.ce) && u.ce.length ? u.ce : autoCE(u || {}));
 // 문제해결 코드는 여러 개 가능 (예전 기록의 code 하나도 읽음)
 const codesOf = (it) => (it && Array.isArray(it.codes) ? it.codes : it && it.code ? [it.code] : []);
-const litMark = (lit) => (!lit ? '' : lit === '해당 없음' ? 'X' : litShort(lit)[0]);
+const LITX = '해당 없음';
+// 소양은 여러 개 가능(lits). 예전 기록은 lit 하나를 읽음. '해당 없음'은 다른 것과 같이 고를 수 없음
+const litsOf = (it) => (it && Array.isArray(it.lits) ? it.lits : it && it.lit ? [it.lit] : []);
+const LIT_ELEMS = () => litList().filter((l) => l !== LITX);
+const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : litShort(lit)[0]);
 const codeStr = (it) => codesOf(it).join('·');
 // 목록·박스에 보이는 짧은 표시: 코드 + 소양 첫 글자 (예: R2 절, I1 의, R3 X)
-const markStr = (it) => [codeStr(it), litMark(it && it.lit)].filter(Boolean).join(' ');
+const markStr = (it) => [codeStr(it), ...litsOf(it).map(litMark)].filter(Boolean).join(' ');
 const LIT_CLS = { 절: 'lm-p', 비: 'lm-c', 의: 'lm-m', X: 'lm-x' };
 const litBadge = (lit) => { const m = litMark(lit); return m ? `<span class="lm ${LIT_CLS[m] || ''}">${m}</span>` : ''; };
+const litBadges = (it) => litsOf(it).map(litBadge).join('');
 // 색 있는 표시: 코드(단계 색) + 소양 배지
 const markHtml = (it, empty = '·') => {
-  const c = codeStr(it), b = litBadge(it && it.lit);
+  const c = codeStr(it), b = litBadges(it);
   return c || b ? `<span style="color:${firstColor(it)}">${esc(c)}</span>${b}` : `<span style="color:var(--muted)">${empty}</span>`;
 };
 const firstColor = (it) => (codesOf(it).length ? stageColor(codesOf(it)[0]) : 'var(--muted)');
-const isDone = (it) => !!(it && codesOf(it).length && it.lit); // 필수 두 가지를 모두 고른 단위
+const isDone = (it) => !!(it && codesOf(it).length && litsOf(it).length); // 코드가 있고 소양을 하나 이상(해당 없음 포함) 고른 단위
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
 // ───────── 시작 ─────────
@@ -577,7 +582,7 @@ function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
   const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${codeStr(it) ? ' · ' + codeStr(it) : ''}`;
-  return `${unitNo(u)}${extra || it.lit ? `<span class="tc">${esc(extra)}${litBadge(it.lit)}</span>` : ''}`;
+  return `${unitNo(u)}${extra || litsOf(it).length ? `<span class="tc">${esc(extra)}${litBadges(it)}</span>` : ''}`;
 }
 
 function renderBoxes() {
@@ -587,7 +592,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || it.lit ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -691,7 +696,7 @@ function renderPanel() {
   const canCode = !!S.coder;
 
   const reqHere = isRequired(u);
-  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요' : it.lit ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
+  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요(미완료)' : litsOf(it).length ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
   P.innerHTML = `
     <div class="u-head">
       <span class="num">#${unitNo(u)}</span>
@@ -729,8 +734,8 @@ function renderPanel() {
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
-    <div class="step"><span class="stepn ${it.lit ? 'ok' : ''}">${it.lit ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">하나만</span></div>
-    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${it.lit === c ? 'on' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
+    <div class="step"><span class="stepn ${litsOf(it).length ? 'ok' : ''}">${litsOf(it).length ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">해당하는 것 모두 · 요소마다 따로 판단</span></div>
+    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${litsOf(it).includes(c) ? 'on' : ''} ${c === LITX ? 'litx' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${c === LITX ? '' : `<i class="cb">${litsOf(it).includes(c) ? '☑' : '☐'}</i>`}${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
     <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점" ${S.mine.done ? 'disabled' : ''}>${esc(it.memo)}</textarea>
     </div>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
@@ -782,7 +787,12 @@ function renderPanel() {
     b.onmouseleave = () => { if (!isTouch()) $('#tip').classList.add('hidden'); };
   });
   P.querySelectorAll('[data-lit]').forEach((b) => b.onclick = () => {
-    setItem(u.id, { lit: it.lit === b.dataset.lit ? '' : b.dataset.lit });
+    // 해당 없음을 고르면 나머지가 풀리고, 세 요소 중 하나를 고르면 해당 없음이 풀림
+    const v = b.dataset.lit, cur = litsOf(it);
+    let next;
+    if (v === LITX) next = cur.includes(LITX) ? [] : [LITX];
+    else { const set = new Set(cur.filter((x) => x !== LITX)); set.has(v) ? set.delete(v) : set.add(v); next = litList().filter((x) => set.has(x)); }
+    setItem(u.id, { lits: next });
   });
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
 }
@@ -1039,12 +1049,12 @@ function bindCoding() {
 function exportCSV(bookId, coderLabel, items, filename, kinds = null) {
   const m = S.metas[bookId];
   const units = bookId === S.book ? S.units : (exportCSV.cache[bookId] || []);
-  const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
+  const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', ...LIT_HEAD(), '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
   const rows = [head];
   units.forEach((u) => {
     if (kinds && !kinds.includes(u.kind || 'main')) return;
     const it = items[u.id] || {};
-    rows.push([bookId, where(bookId, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), coderLabel, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]);
+    rows.push([bookId, where(bookId, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), coderLabel, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]);
   });
   download(filename, toCSV(rows));
 }
@@ -1072,6 +1082,9 @@ function fleiss(rows) { // rows: [[r1,r2,r3], ...] 모두 값 있음
   const Pe = Object.values(tot).reduce((s, x) => s + (x / (N * m)) ** 2, 0);
   return { n: N, po: all / N, k: Pe === 1 ? (Pbar === 1 ? 1 : NaN) : (Pbar - Pe) / (1 - Pe) };
 }
+// CSV: 소양 열 4개(절차적 활용·비판적 평가·의사소통·해당 없음)를 예/아니오로
+const LIT_HEAD = () => litList().map((l) => '소양: ' + litShort(l));
+const litCols = (it) => litList().map((l) => (litsOf(it).includes(l) ? '예' : '아니오'));
 const litShort = (c) => ({ '통계·수학적 지식의 절차적 활용': '절차적 활용' })[c] || c;
 const pct = (v) => (isNaN(v) ? '—' : (v * 100).toFixed(1) + '%');
 const kfmt = (v) => (isNaN(v) ? '—' : v.toFixed(3));
@@ -1098,17 +1111,25 @@ function agreeStats(units, items, coders) {
     const A = both.map((u) => lvSet(items(coders[i])[u.id])), Bs = both.map((u) => lvSet(items(coders[j])[u.id]));
     const po = both.length ? both.filter((_, k) => sameSet(A[k], Bs[k])).length / both.length : NaN;
     const ks = cats.map((c) => cohen(A.map((x) => x.includes(c)), Bs.map((x) => x.includes(c))).k).filter((k) => !isNaN(k));
-    const ca = [], cb = [];
-    units.forEach((u) => { const x = items(coders[i])[u.id] || {}, y = items(coders[j])[u.id] || {}; if (x.lit && y.lit) { ca.push(x.lit); cb.push(y.lit); } });
-    pairs.push({ name: `${coders[i]} – ${coders[j]}`, code: { n: both.length, po, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN }, lit: cohen(ca, cb) });
+    // 소양(여러 개 가능): 요소마다 '골랐다/안 골랐다'로 단순 일치율과 Cohen κ, 그리고 고른 묶음이 똑같은 비율
+    const lb = units.filter((u) => litsOf(items(coders[i])[u.id]).length && litsOf(items(coders[j])[u.id]).length);
+    const LA = lb.map((u) => litsOf(items(coders[i])[u.id])), LB = lb.map((u) => litsOf(items(coders[j])[u.id]));
+    const el = {}; litList().forEach((e) => { const r = cohen(LA.map((x) => x.includes(e)), LB.map((x) => x.includes(e))); el[e] = { po: r.po, k: r.k }; });
+    const lks = Object.values(el).map((x) => x.k).filter((k) => !isNaN(k));
+    const lit = { n: lb.length, po: lb.length ? lb.filter((_, k) => sameSet([...LA[k]].sort(), [...LB[k]].sort())).length / lb.length : NaN, k: lks.length ? lks.reduce((a, b) => a + b, 0) / lks.length : NaN, el };
+    pairs.push({ name: `${coders[i]} – ${coders[j]}`, code: { n: both.length, po, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN }, lit });
   }
   const all3 = units.filter((u) => coders.every((c) => codesOf(items(c)[u.id]).length));
   const sets3 = all3.map((u) => coders.map((c) => lvSet(items(c)[u.id])));
   const flKs = cats.map((c) => fleiss(sets3.map((row) => row.map((x) => x.includes(c)))).k).filter((k) => !isNaN(k));
   const fl = { n: all3.length, po: all3.length ? sets3.filter((row) => sameSet(row[0], row[1]) && sameSet(row[1], row[2])).length / all3.length : NaN, k: flKs.length ? flKs.reduce((a, b) => a + b, 0) / flKs.length : NaN };
-  const tLit = [];
-  units.forEach((u) => { const its = coders.map((c) => items(c)[u.id] || {}); if (its.every((x) => x.lit)) tLit.push(its.map((x) => x.lit)); });
-  const flLit = fleiss(tLit);
+  // 세 명: 요소마다 Fleiss κ와 단순 일치율(세 명이 모두 같게 판단한 비율)
+  const lall = units.filter((u) => coders.every((c) => litsOf(items(c)[u.id]).length));
+  const L3 = lall.map((u) => coders.map((c) => litsOf(items(c)[u.id])));
+  const el3 = {};
+  litList().forEach((e) => { const rows = L3.map((row) => row.map((x) => x.includes(e))); el3[e] = { po: rows.length ? rows.filter((r) => r.every((v) => v === r[0])).length / rows.length : NaN, k: fleiss(rows).k }; });
+  const fks = Object.values(el3).map((x) => x.k).filter((k) => !isNaN(k));
+  const flLit = { n: lall.length, po: lall.length ? L3.filter((row) => row.every((x) => sameSet([...x].sort(), [...row[0]].sort()))).length / lall.length : NaN, k: fks.length ? fks.reduce((a, b) => a + b, 0) / fks.length : NaN, el: el3 };
   return { pairs, fl, flLit };
 }
 
@@ -1160,7 +1181,7 @@ async function renderOverview() {
   });
   box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>
     <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요. 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
-    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>소양 Fleiss κ</th><th>최종 확정</th></tr>
+    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>소양 κ (요소별 Fleiss 평균)</th><th>최종 확정</th></tr>
     ${rows.map((x) => `<tr class="${x.cls} ${x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" data-ov="${esc(x.id)}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     </table></div>`;
   box.querySelectorAll('[data-ov]').forEach((tr) => tr.onclick = async () => {
@@ -1211,16 +1232,20 @@ async function renderCompare() {
   const kindBoxes = Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${CMP.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ');
   const levelRadios = [['fine', '세부 코드'], ['basic', '기본 코드'], ['stage', '단계']].map(([k, v]) => `<label><input type="radio" name="lv" value="${k}" ${CMP.level === k ? 'checked' : ''}> ${v}</label>`).join(' ');
 
+  // 다수결 소양: 세 요소마다 두 명 이상 고른 것, 하나도 없으면 '해당 없음'(소양을 고른 사람이 두 명 이상일 때)
+  const majLits = (its) => { if (its.filter((x) => litsOf(x).length).length < 2) return []; const m = LIT_ELEMS().filter((e) => its.filter((x) => litsOf(x).includes(e)).length >= 2); return m.length ? m : [LITX]; };
   // 다수결 코드 묶음: 두 명 이상이 고른 코드
   const majCodes = (its) => codeList().map((c) => c.code).filter((c) => its.filter((x) => codesOf(x).includes(c)).length >= 2);
   const disRows = units.map((u) => {
     const its = coders.map((c) => items(c)[u.id] || {});
     const sets = its.map(lvSet);
-    const dis = sets.some((x) => !x.length) || !sets.every((x) => sameSet(x, sets[0]));
+    const ls = its.map((x) => [...litsOf(x)].sort());
+    const dis = sets.some((x) => !x.length) || !sets.every((x) => sameSet(x, sets[0])) || ls.some((x) => !x.length) || !ls.every((x) => sameSet(x, ls[0]));
     return { u, its, dis };
   });
   const shown = CMP.onlyDis ? disRows.filter((x) => x.dis) : disRows;
   const fin = finalState.data.items || {};
+  const finLits = (id, f) => `<div class="fin-codes">${litList().map((l) => `<button data-fl="${esc(l)}" data-fid="${id}" class="${litsOf(f).includes(l) ? 'on' : ''}">${litBadge(l)} ${esc(litShort(l))}</button>`).join('')}</div>`;
   const finChips = (id, f) => `<div class="fin-codes">${codeList().map((c) => `<button data-fc="${esc(c.code)}" data-fid="${id}" class="${codesOf(f).includes(c.code) ? 'on' : ''}" style="${codesOf(f).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}">${esc(c.code)}</button>`).join('')}</div>`;
   const m = S.metas[S.book];
   const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
@@ -1233,10 +1258,15 @@ async function renderCompare() {
       <div class="card"><div class="k">Fleiss' κ (코드별 평균)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
       <div class="card"><div class="k">최종 코드 확정</div><div class="v">${finDone}/${units.length}</div></div>
     </div>
-    <table class="t"><tr><th class="l">쌍</th><th>단위 수</th><th>코드 완전 일치율</th><th>Cohen's κ (코드별 평균)</th><th>소양 일치율</th><th>소양 κ</th></tr>
+    <table class="t"><tr><th class="l">쌍</th><th>단위 수</th><th>코드 완전 일치율</th><th>Cohen's κ (코드별 평균)</th><th>소양 완전 일치율</th><th>소양 κ (요소별 평균)</th></tr>
       ${pairs.map((p) => `<tr><td class="l">${esc(p.name)}</td><td>${p.code.n}</td><td>${pct(p.code.po)}</td><td>${kfmt(p.code.k)} <span class="hint">${kappaWord(p.code.k)}</span></td><td>${pct(p.lit.po)}</td><td>${kfmt(p.lit.k)} <span class="hint">${kappaWord(p.lit.k)}</span></td></tr>`).join('')}
       <tr><td class="l"><b>세 명 (Fleiss)</b></td><td>${fl.n}</td><td>${pct(fl.po)}</td><td>${kfmt(fl.k)}</td><td>${pct(flLit.po)}</td><td>${kfmt(flLit.k)}</td></tr>
     </table>
+    <h3>통계적 소양: 요소별 일치</h3>
+    <table class="t"><tr><th class="l">요소</th><th>세 명 단순 일치율</th><th>Fleiss' κ (세 명)</th>${pairs.map((p) => `<th>${esc(p.name)}<br>일치율 · Cohen κ</th>`).join('')}</tr>
+      ${litList().map((e) => `<tr><td class="l">${litBadge(e)} ${esc(litShort(e))}</td><td>${pct(flLit.el[e].po)}</td><td>${kfmt(flLit.el[e].k)} <span class="hint">${kappaWord(flLit.el[e].k)}</span></td>${pairs.map((p) => `<td>${pct(p.lit.el[e].po)} · ${kfmt(p.lit.el[e].k)}</td>`).join('')}</tr>`).join('')}
+    </table>
+    <p class="note">소양은 여러 개 고를 수 있어서 요소마다 따로 셉니다. <b>단순 일치율</b> = 그 요소를 '골랐다/안 골랐다'가 같은 단위의 비율(세 명은 셋 모두 같은 비율). <b>세 명 κ</b> = 요소마다 Fleiss' κ, <b>두 명씩</b> = 요소마다 Cohen's κ. 위 표의 '소양 κ'는 요소별 κ의 평균이고, '소양 완전 일치율'은 고른 소양 묶음이 똑같은 비율입니다. 거의 모든 단위에서 '예'인 요소는 일치율이 높아도 κ가 낮게 나올 수 있어 일치율을 함께 봅니다. 소양을 모두 입력한 단위(${flLit.n}개)만 셉니다.</p>
     <p class="note">코드는 여러 개 고를 수 있어서, 완전 일치율은 고른 코드 묶음이 똑같은 단위의 비율이고, κ는 코드마다 '골랐다/안 골랐다'의 κ를 구해 평균한 값입니다. 두 사람이 모두 입력한 단위만 셉니다. κ 해석 기준: Landis & Koch(1977). '단계' 수준은 현재 분석틀(${esc(S.cfg.activeFramework)})의 단계로 묶어 비교합니다.</p>
 
     <h3>단위별 비교와 최종 코드</h3>
@@ -1250,11 +1280,11 @@ async function renderCompare() {
       ${shown.map(({ u, its, dis }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
-        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${litBadge(it.lit)}</td>`).join('');
+        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${litBadges(it)}</td>`).join('');
         const mj = majCodes(its);
         return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
           <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>
-          <td class="fin"><select data-flit="${u.id}">${['', ...litList()].map((c) => `<option value="${esc(c)}" ${c === (f.lit || '') ? 'selected' : ''}>${esc(c ? litShort(c) : '—')}</option>`).join('')}</select></td>
+          <td class="fin">${finLits(u.id, f)}${!litsOf(f).length && majLits(its).length ? `<span class="hint">다수 ${esc(majLits(its).map(litShort).join('·'))}</span>` : ''}</td>
           <td class="l hint">${memos}</td></tr>`;
       }).join('')}
     </table>`;
@@ -1271,12 +1301,19 @@ async function renderCompare() {
     const set = new Set(codesOf(f)); set.has(el.dataset.fc) ? set.delete(el.dataset.fc) : set.add(el.dataset.fc);
     const order = codeList().map((c) => c.code); const codes = [...set].sort((a, b) => order.indexOf(a) - order.indexOf(b));
     const patch = { codes, code: codes[0] || '' };
-    if (f.lit === undefined) patch.lit = majority(its.map((x) => x.lit)); // 처음 정할 때 소양은 다수결로 함께
+    if (!litsOf(f).length) patch.lits = majLits(its); // 처음 정할 때 소양은 다수결로 함께
     setFin(id, patch);
     el.classList.toggle('on', codes.includes(el.dataset.fc));
     el.style.cssText = codes.includes(el.dataset.fc) ? `background:${stageColor(el.dataset.fc)};border-color:${stageColor(el.dataset.fc)}` : '';
   });
-  B.querySelectorAll('[data-flit]').forEach((el) => el.onchange = () => setFin(el.dataset.flit, { lit: el.value }));
+  B.querySelectorAll('[data-fl]').forEach((el) => el.onclick = () => {
+    const id = el.dataset.fid, v = el.dataset.fl, cur = litsOf((finalState.data.items || {})[id]);
+    let next;
+    if (v === LITX) next = cur.includes(LITX) ? [] : [LITX];
+    else { const set = new Set(cur.filter((x) => x !== LITX)); set.has(v) ? set.delete(v) : set.add(v); next = litList().filter((x) => set.has(x)); }
+    setFin(id, { lits: next });
+    el.parentElement.querySelectorAll('[data-fl]').forEach((b) => b.classList.toggle('on', next.includes(b.dataset.fl)));
+  });
   $('#fillMaj').onclick = () => {
     let n = 0;
     units.forEach((u) => {
@@ -1286,7 +1323,7 @@ async function renderCompare() {
       if (!mj.length) return;
       finalState.data.items[u.id] = {
         ...(finalState.data.items[u.id] || {}), codes: mj, code: mj[0],
-        lit: majority(its.map((x) => x.lit)),
+        lits: majLits(its),
       };
       n++;
     });
@@ -1295,11 +1332,11 @@ async function renderCompare() {
   };
   $('#exportFinal').onclick = () => exportCSV(S.book, '최종', fin, `${S.book}_최종코드.csv`);
   $('#exportAll').onclick = () => {
-    const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
+    const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', ...LIT_HEAD(), '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
     const rows = [head];
     [...coders, '최종'].forEach((c) => {
       const its = c === '최종' ? fin : items(c);
-      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), c, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]); });
+      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), c, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]); });
     });
     download(`${S.book}_세명코딩.csv`, toCSV(rows));
   };
@@ -1396,14 +1433,20 @@ async function renderStats() {
     </table>
     <p class="note">내용 요소는 박스의 발문 요약·성취기준으로 자동으로 정해집니다(박스 정보에서 고칠 수 있음). 여러 개인 단위는 각 요소에 한 번씩 셉니다.</p>
     <h3>통계적 소양</h3>
+    <p class="note"><b>① 단위 기준</b>: 그 요소를 반영한 단위 수 ÷ 전체 단위 수. 한 단위에 소양이 여러 개일 수 있어 <b>합이 100%를 넘을 수 있습니다.</b></p>
     <table class="t"><tr><th class="l">구분</th><th>단위 수</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th></tr>
-      ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); return `<tr><td class="l">${esc(g)}</td><td>${rs.length}</td>${litList().map((l) => { const c = rs.filter((r) => r.it.lit === l).length; return `<td>${c} <span class="hint">(${pct(c / rs.length)})</span></td>`; }).join('')}<td>${rs.filter((r) => !r.it.lit).length}</td></tr>`; }).join('')}
+      ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); return `<tr><td class="l">${esc(g)}</td><td>${rs.length}</td>${litList().map((l) => { const c = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${c} <span class="hint">(${pct(c / rs.length)})</span></td>`; }).join('')}<td>${rs.filter((r) => !litsOf(r.it).length).length}</td></tr>`; }).join('')}
+    </table>
+    <p class="note"><b>② 코드 기준</b>: 각 요소 수 ÷ 전체 소양 코드 수(합 100%).</p>
+    <table class="t"><tr><th class="l">구분</th><th>소양 코드 수</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}</tr>
+      ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); const tot = rs.reduce((a, r) => a + litsOf(r.it).length, 0); return `<tr><td class="l">${esc(g)}</td><td>${tot}</td>${litList().map((l) => { const c = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${c} <span class="hint">(${pct(c / tot)})</span></td>`; }).join('')}</tr>`; }).join('')}
     </table>
     <h3>통계적 문제해결 × 통계적 소양 (${ST.level === 'stage' ? '단계' : ST.level === 'basic' ? '기본 코드' : '세부 코드'})</h3>
     <table class="t"><tr><th class="l">문제해결 \ 소양</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th><th>합계</th></tr>
-      ${cats.map((c) => { const rs = crecs.filter((r) => r.k === c); if (!rs.length) return ''; return `<tr><td class="l">${esc(c)}</td>${litList().map((l) => { const n = rs.filter((r) => r.it.lit === l).length; return `<td>${n || ''}</td>`; }).join('')}<td>${rs.filter((r) => !r.it.lit).length || ''}</td><td><b>${rs.length}</b></td></tr>`; }).join('')}
-      <tr><td class="l"><b>합계</b></td>${litList().map((l) => `<td><b>${crecs.filter((r) => r.it.lit === l).length}</b></td>`).join('')}<td><b>${crecs.filter((r) => !r.it.lit).length}</b></td><td><b>${crecs.length}</b></td></tr>
+      ${cats.map((c) => { const rs = crecs.filter((r) => r.k === c); if (!rs.length) return ''; return `<tr><td class="l">${esc(c)}</td>${litList().map((l) => { const n = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${n || ''}</td>`; }).join('')}<td>${rs.filter((r) => !litsOf(r.it).length).length || ''}</td><td><b>${rs.length}</b></td></tr>`; }).join('')}
+      <tr><td class="l"><b>합계</b></td>${litList().map((l) => `<td><b>${crecs.filter((r) => litsOf(r.it).includes(l)).length}</b></td>`).join('')}<td><b>${crecs.filter((r) => !litsOf(r.it).length).length}</b></td><td><b>${crecs.length}</b></td></tr>
     </table>
+    <p class="note">한 단위에 소양이 여러 개면 각 소양 칸에 한 번씩 셉니다(소양 칸의 합이 합계보다 클 수 있음).</p>
     <p class="note">위 '수준'과 '포함할 유형' 설정을 따릅니다. 교과서·시기를 나눠 보려면 위에서 교과서를 골라 보세요.</p>
     ${porterHtml(recs)}
     <div class="bar" style="margin-top:16px"><button id="stCsvA">빈도표 CSV</button><button id="stCsvRec">코딩 기록 CSV (선택한 교과서 전체)</button></div>`}
@@ -1416,8 +1459,8 @@ async function renderStats() {
   if (!recs.length) return;
   $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
   $('#stCsvRec').onclick = () => {
-    const rows = [[...'교과서ID', '쪽', '위치', '발문', '문제해결 코드', '소양 요소', '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID', '시기', '출판사']];
-    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.pos, u.summary, codesOf(it).join(';'), litShort(it.lit || ''), ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id, period, publisher]));
+    const rows = [['교과서ID', '쪽', '위치', '발문', '문제해결 코드', ...LIT_HEAD(), '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID', '시기', '출판사']];
+    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id, period, publisher]));
     download('코딩기록.csv', toCSV(rows));
   };
 }

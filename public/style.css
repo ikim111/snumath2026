@@ -321,3 +321,9 @@ table.ov tr.on td { background: var(--accent-soft); }
 /* 완료한 목록: 코드·소양 잠금 */
 .locked .code-grid, .locked .lit-grid { opacity: .55; pointer-events: none; }
 .lock-note { margin: 6px 0; padding: 6px 10px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); font-size: 12.5px; font-weight: 600; }
+
+/* 소양 여러 개 고르기 */
+.lit-grid .cb { font-style: normal; margin-right: 3px; font-weight: 400; }
+.lit-grid button.litx { border-style: dashed; }
+.fin-codes [data-fl] { font-size: 11.5px; padding: 2px 6px; }
+.fin-codes [data-fl].on { background: var(--ink); border-color: var(--ink); color: #fff; }
