@@ -38,7 +38,7 @@ export async function GET(req) {
 
   const coder = q.get('coder');
   if (!okId(coder) || !list.includes(coder)) return json({ error: '코더 이름 확인' }, 400);
-  return json(await readJSON(`codings/${book}/${coder}.json`));
+  return json(await readJSON(`codings/${book}/${coder}.json`, { fresh: true })); // 내 것은 항상 최신
 }
 
 export async function PUT(req) {

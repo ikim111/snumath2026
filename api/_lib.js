@@ -49,12 +49,24 @@ export function safePath(p) {
   return p;
 }
 
-export async function readJSON(path) {
+// 서버 메모리 캐시: 같은 함수 인스턴스 안에서 같은 JSON을 잠깐 기억 → Blob 읽기(Simple Operation) 줄이기
+// 쓰기 성공하면 바로 새 값으로 바꾸고, 충돌 처리할 때는 캐시를 건너뛰고 새로 읽음
+const MEM = new Map();
+const ttlFor = (p) => /^(config|curriculum)\//.test(p) || /\/meta\.json$/.test(p) ? 300e3 : /^codings\//.test(p) ? 30e3 : 60e3;
+export const forget = (p) => MEM.delete(p);
+const clone = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
+export async function readJSON(path, { fresh = false } = {}) {
+  const hit = MEM.get(path);
+  if (!fresh && hit && Date.now() - hit.t < ttlFor(path)) return { data: clone(hit.data), etag: hit.etag };
   const r = await blobGet(path, { useCache: false });
-  if (!r || r.statusCode !== 200) return { data: null, etag: null };
-  const text = await new Response(r.stream).text();
-  // 읽을 때 압축 때문에 약한 ETag(W/"…")가 올 수 있어 쓰기 조건과 맞도록 접두어 제거
-  return { data: JSON.parse(text), etag: (r.blob.etag || '').replace(/^W\//, '') };
+  let out = { data: null, etag: null };
+  if (r && r.statusCode === 200) {
+    const text = await new Response(r.stream).text();
+    // 읽을 때 압축 때문에 약한 ETag(W/"…")가 올 수 있어 쓰기 조건과 맞도록 접두어 제거
+    out = { data: JSON.parse(text), etag: (r.blob.etag || '').replace(/^W\//, '') };
+  }
+  MEM.set(path, { data: clone(out.data), etag: out.etag, t: Date.now() }); // 없는 파일도 기억(아직 코딩 안 한 사람 등)
+  return out;
 }
 
 // etag가 있으면 그 버전일 때만 덮어씀, 없으면 새 파일일 때만 씀 → 동시 수정 충돌 방지
@@ -68,9 +80,11 @@ export async function writeJSON(path, data, etag) {
   else opts.allowOverwrite = false;
   try {
     const res = await blobPut(path, JSON.stringify(data), opts);
-    return { ok: true, etag: res.etag };
+    const et = (res.etag || '').replace(/^W\//, '');
+    MEM.set(path, { data: clone(data), etag: et, t: Date.now() });
+    return { ok: true, etag: et };
   } catch (e) {
-    const cur = await readJSON(path);
+    const cur = await readJSON(path, { fresh: true });
     return { ok: false, conflict: true, current: cur, error: String(e.message || e) };
   }
 }

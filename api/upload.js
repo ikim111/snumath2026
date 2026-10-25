@@ -1,5 +1,5 @@
 // 관리용 업로드: 쪽 이미지·초기 박스 등을 올릴 때 사용 (키 필요)
-import { authed, deny, json, safePath, blobPut } from './_lib.js';
+import { authed, deny, json, safePath, blobPut, forget } from './_lib.js';
 
 export async function PUT(req) {
   if (!authed(req)) return deny();
@@ -8,5 +8,6 @@ export async function PUT(req) {
   const type = req.headers.get('content-type') || 'application/octet-stream';
   const buf = Buffer.from(await req.arrayBuffer());
   const r = await blobPut(p, buf, { contentType: type, allowOverwrite: true, cacheControlMaxAge: 60 });
+  forget(p); // 이 경로를 기억해 둔 게 있으면 지움
   return json({ ok: true, pathname: r.pathname, etag: r.etag });
 }

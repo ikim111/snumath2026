@@ -172,7 +172,7 @@ function frameworksToCSV(fws) {
 
 // ───────── API ─────────
 async function api(path, opts = {}) {
-  const res = await fetch(path, { ...opts, headers: { 'x-app-key': S.key, 'content-type': 'application/json', ...(opts.headers || {}) } });
+  const res = await fetch(path, { ...opts, ...(S.leaving ? { keepalive: true } : {}), headers: { 'x-app-key': S.key, 'content-type': 'application/json', ...(opts.headers || {}) } });
   if (res.status === 401) { showGate(); throw new Error('키 오류'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok && res.status !== 409) throw new Error(body.error || res.statusText);
@@ -184,9 +184,15 @@ const putStore = (f, data, etag) => api('/api/store?f=' + encodeURIComponent(f),
 async function pageImage(bookId, file) {
   const p = `books/${bookId}/pages/${file}`;
   if (S.imgCache.has(p)) return S.imgCache.get(p);
-  const prom = fetch('/api/img?p=' + encodeURIComponent(p), { headers: { 'x-app-key': S.key } })
-    .then((r) => { if (!r.ok) throw new Error('이미지 없음'); return r.blob(); })
-    .then((b) => URL.createObjectURL(b));
+  const url = '/api/img?p=' + encodeURIComponent(p);
+  const prom = (async () => {
+    let cache = null;
+    try { cache = await caches.open('snu-pages-v1'); const hit = await cache.match(url); if (hit) return URL.createObjectURL(await hit.blob()); } catch {}
+    const r = await fetch(url, { headers: { 'x-app-key': S.key } });
+    if (!r.ok) throw new Error('이미지 없음');
+    try { if (cache) await cache.put(url, r.clone()); } catch {}
+    return URL.createObjectURL(await r.blob());
+  })();
   S.imgCache.set(p, prom);
   prom.catch(() => S.imgCache.delete(p));
   return prom;
@@ -390,7 +396,9 @@ function bookLabel(id) {
 }
 function updateBookOption(id) { const o = document.querySelector(`#bookSel option[value="${CSS.escape(id)}"]`); if (o) o.textContent = bookLabel(id); }
 // 목록마다 내 진행률을 뒤에서 조용히 불러옴
-async function loadProgress() {
+async function loadProgress(force = false) {
+  if (!force && Date.now() - (S.progT || 0) < 180e3) return; // 목록 바꿀 때마다 전부 읽지 않게
+  S.progT = Date.now();
   await Promise.all(S.cfg.books.map(async (id) => {
     try {
       const [u, p] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&progress=1`)]);
@@ -435,12 +443,13 @@ fillHeader.coders = function () {
 };
 
 async function setCoder(name) {
+  await flushSaves();
   S.coder = name; ls.set('coder', name); $('#coderSel').value = name;
   $('#who').classList.add('hidden');
   S.prog = {}; fillHeaderBooks();
   await loadMine(); renderAll();
   if (name && !ls.get('tourDone')) setTimeout(startTour, 400);
-  loadProgress();
+  loadProgress(true);
 }
 function fillHeaderBooks() { const v = S.book; const sel = $('#bookSel'); const save = sel.onchange; fillHeader.books(); sel.value = v || ''; sel.onchange = save; }
 function showWho() {
@@ -461,6 +470,7 @@ function bindTabs() {
 }
 
 async function selectBook(id) {
+  await flushSaves();
   S.book = id || null; S.sel = null; S.page = 0;
   if (id) ls.set('book', id);
   $('#bookSel').value = id || '';
@@ -474,7 +484,7 @@ async function selectBook(id) {
   await loadMine();
   const p = Number(ls.get('page:' + id)); if (p && S.metas[id] && p < S.metas[id].pages.length) S.page = p;
   renderAll();
-  loadProgress(); // 목록을 바꿀 때마다 세 명 진행률 새로 받기
+  loadProgress(); // 3분이 지났을 때만 진행률 새로 받기
 }
 
 async function loadMine() {
@@ -482,6 +492,7 @@ async function loadMine() {
   if (!S.book || !S.coder) return;
   const r = await api(`/api/codings?book=${encodeURIComponent(S.book)}&coder=${encodeURIComponent(S.coder)}`);
   if (r.data) { S.mine = { done: false, items: {}, ...r.data }; S.mineEtag = r.etag; }
+  S.mineSig = S.book + '|' + S.coder + '|' + JSON.stringify([S.mine.done, S.mine.items]);
 }
 
 function sortUnits() {
@@ -808,13 +819,16 @@ function setItem(id, patch, rerender = true) {
   scheduleMine();
   if (rerender) { renderPanel(); renderBoxes(); renderList(); renderPages(); renderCur(); renderDone(); }
 }
-function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(saveMine, 700); }
+const SAVE_DELAY = 8000; // 자동 저장 간격(ms): Blob 쓰기 횟수를 줄이려고 길게
+function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(() => { mineTimer = null; saveMine(); }, SAVE_DELAY); }
 async function saveMine(retry = true) {
   if (!S.coder || !S.book) return;
+  const sig = S.book + '|' + S.coder + '|' + JSON.stringify([S.mine.done, S.mine.items]);
+  if (retry && sig === S.mineSig) { saveState('저장됨'); return; } // 바뀐 게 없으면 저장 안 함
   const data = { ...S.mine, framework: S.cfg.activeFramework, coder: S.coder, updated: Date.now() };
   try {
     const r = await api(`/api/codings?book=${encodeURIComponent(S.book)}&coder=${encodeURIComponent(S.coder)}`, { method: 'PUT', body: JSON.stringify({ data, etag: S.mineEtag }) });
-    if (r.ok) { S.mineEtag = r.etag; saveState('저장됨 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); return; }
+    if (r.ok) { S.mineEtag = r.etag; S.mineSig = sig; saveState('저장됨 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); return; }
     // 다른 탭에서 저장한 경우: 항목별로 최근 것 우선 병합
     if (retry && r.current) {
       const other = (r.current.data && r.current.data.items) || {};
@@ -827,7 +841,7 @@ async function saveMine(retry = true) {
 
 // ───────── 박스 저장 (여러 명 수정 병합) ─────────
 let unitTimer = null;
-function markDirty(u) { u.t2 = Date.now(); S.dirty.add(u.id); saveState('박스 저장 대기…'); clearTimeout(unitTimer); unitTimer = setTimeout(saveUnits, 900); }
+function markDirty(u) { u.t2 = Date.now(); S.dirty.add(u.id); saveState('박스 저장 대기…'); clearTimeout(unitTimer); unitTimer = setTimeout(() => { unitTimer = null; saveUnits(); }, SAVE_DELAY); }
 async function saveUnits(retry = true) {
   const f = `books/${S.book}/units.json`;
   try {
@@ -903,6 +917,7 @@ function bindCoding() {
       const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
       if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
+    if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; }
     S.mine.done = !S.mine.done; renderDone(); renderPanel(); await saveMine();
     { const pg = S.prog[S.book]; if (pg) { pg.by = pg.by || {}; pg.by[S.coder] = { ...(pg.by[S.coder] || {}), fin: S.mine.done }; updateBookOption(S.book); } }
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
@@ -1099,7 +1114,7 @@ const OV = { cache: {}, t: 0 };
 async function renderOverview() {
   const box = $('#cmpOv'); if (!box) return;
   const coders = S.cfg.coders;
-  const fresh = Date.now() - OV.t < 20000;
+  const fresh = Date.now() - OV.t < 120000;
   if (!fresh) {
     await Promise.all(S.cfg.books.map(async (id) => {
       try {
@@ -1286,7 +1301,17 @@ async function renderCompare() {
     download(`${S.book}_세명코딩.csv`, toCSV(rows));
   };
 }
-function scheduleFinal() { saveState('최종 코드 저장 대기…'); clearTimeout(finalTimer); finalTimer = setTimeout(saveFinal, 700); }
+function scheduleFinal() { saveState('최종 코드 저장 대기…'); clearTimeout(finalTimer); finalTimer = setTimeout(() => { finalTimer = null; saveFinal(); }, SAVE_DELAY); }
+// 기다리는 저장을 지금 바로 (목록 바꾸기·이름 바꾸기·페이지 떠나기·완료 누르기 전에)
+async function flushSaves() {
+  const jobs = [];
+  if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; jobs.push(saveMine()); }
+  if (unitTimer) { clearTimeout(unitTimer); unitTimer = null; jobs.push(saveUnits()); }
+  if (finalTimer) { clearTimeout(finalTimer); finalTimer = null; jobs.push(saveFinal()); }
+  await Promise.all(jobs);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { S.leaving = true; flushSaves().finally(() => { S.leaving = false; }); } });
+window.addEventListener('pagehide', () => { S.leaving = true; flushSaves(); });
 async function saveFinal(retry = true) {
   const r = await putStore(`final/${S.book}.json`, finalState.data, finalState.etag);
   if (r.ok) { finalState.etag = r.etag; saveState('최종 코드 저장됨'); return; }

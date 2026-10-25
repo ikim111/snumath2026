@@ -8,6 +8,6 @@ export async function GET(req) {
   const r = await blobGet(p);
   if (!r || r.statusCode !== 200) return json({ error: '없음' }, 404);
   return new Response(r.stream, {
-    headers: { 'content-type': r.blob.contentType, 'cache-control': 'private, max-age=86400' },
+    headers: { 'content-type': r.blob.contentType, 'cache-control': 'private, max-age=31536000, immutable' },
   });
 }
