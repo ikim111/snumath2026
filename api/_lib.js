@@ -49,15 +49,16 @@ export function safePath(p) {
   return p;
 }
 
-// 서버 메모리 캐시: 같은 함수 인스턴스 안에서 같은 JSON을 잠깐 기억 → Blob 읽기(Simple Operation) 줄이기
-// 쓰기 성공하면 바로 새 값으로 바꾸고, 충돌 처리할 때는 캐시를 건너뛰고 새로 읽음
+// 서버 메모리 캐시: 잘 안 바뀌는 파일(설정·교과서 정보·교육과정)만 5분 기억 → Blob 읽기 줄이기
+// 박스(units)·최종 코드(final)·개인 코딩(codings)은 여러 명이 고치고 etag로 충돌을 막으므로 절대 캐시하지 않음
 const MEM = new Map();
-const ttlFor = (p) => /^(config|curriculum)\//.test(p) || /\/meta\.json$/.test(p) ? 300e3 : /^codings\//.test(p) ? 30e3 : 60e3;
+const CACHEABLE = (p) => /^config\/[^/]+\.json$/.test(p) || /^books\/[^/]+\/meta\.json$/.test(p) || /^curriculum\/[^/]+\.json$/.test(p);
+const TTL = 300e3;
 export const forget = (p) => MEM.delete(p);
 const clone = (x) => (x == null ? x : JSON.parse(JSON.stringify(x)));
 export async function readJSON(path, { fresh = false } = {}) {
   const hit = MEM.get(path);
-  if (!fresh && hit && Date.now() - hit.t < ttlFor(path)) return { data: clone(hit.data), etag: hit.etag };
+  if (!fresh && hit && Date.now() - hit.t < TTL) return { data: clone(hit.data), etag: hit.etag };
   const r = await blobGet(path, { useCache: false });
   let out = { data: null, etag: null };
   if (r && r.statusCode === 200) {
@@ -65,7 +66,7 @@ export async function readJSON(path, { fresh = false } = {}) {
     // 읽을 때 압축 때문에 약한 ETag(W/"…")가 올 수 있어 쓰기 조건과 맞도록 접두어 제거
     out = { data: JSON.parse(text), etag: (r.blob.etag || '').replace(/^W\//, '') };
   }
-  MEM.set(path, { data: clone(out.data), etag: out.etag, t: Date.now() }); // 없는 파일도 기억(아직 코딩 안 한 사람 등)
+  if (CACHEABLE(path)) MEM.set(path, { data: clone(out.data), etag: out.etag, t: Date.now() });
   return out;
 }
 
@@ -81,7 +82,7 @@ export async function writeJSON(path, data, etag) {
   try {
     const res = await blobPut(path, JSON.stringify(data), opts);
     const et = (res.etag || '').replace(/^W\//, '');
-    MEM.set(path, { data: clone(data), etag: et, t: Date.now() });
+    if (CACHEABLE(path)) MEM.set(path, { data: clone(data), etag: et, t: Date.now() });
     return { ok: true, etag: et };
   } catch (e) {
     const cur = await readJSON(path, { fresh: true });

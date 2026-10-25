@@ -172,7 +172,9 @@ function frameworksToCSV(fws) {
 
 // ───────── API ─────────
 async function api(path, opts = {}) {
-  const res = await fetch(path, { ...opts, ...(S.leaving ? { keepalive: true } : {}), headers: { 'x-app-key': S.key, 'content-type': 'application/json', ...(opts.headers || {}) } });
+  // 떠날 때는 keepalive로 보내 요청이 끊기지 않게. keepalive는 64KB까지만 되므로 큰 데이터는 화면이 가려질 때(visibilitychange) 미리 저장된 것에 맡김
+  const ka = S.leaving && (!opts.body || opts.body.length < 60000);
+  const res = await fetch(path, { ...opts, ...(ka ? { keepalive: true } : {}), headers: { 'x-app-key': S.key, 'content-type': 'application/json', ...(opts.headers || {}) } });
   if (res.status === 401) { showGate(); throw new Error('키 오류'); }
   const body = await res.json().catch(() => ({}));
   if (!res.ok && res.status !== 409) throw new Error(body.error || res.statusText);
@@ -184,7 +186,8 @@ const putStore = (f, data, etag) => api('/api/store?f=' + encodeURIComponent(f),
 async function pageImage(bookId, file) {
   const p = `books/${bookId}/pages/${file}`;
   if (S.imgCache.has(p)) return S.imgCache.get(p);
-  const url = '/api/img?p=' + encodeURIComponent(p);
+  // 주소에 버전(v)을 붙여서, 같은 경로에 쪽 이미지를 다시 올리면 새 주소로 받게 함(1년 캐시라도 옛 이미지 안 보임)
+  const url = '/api/img?p=' + encodeURIComponent(p) + '&v=' + encodeURIComponent((S.metas[bookId] || {}).v || 1);
   const prom = (async () => {
     let cache = null;
     try { cache = await caches.open('snu-pages-v1'); const hit = await cache.match(url); if (hit) return URL.createObjectURL(await hit.blob()); } catch {}
@@ -1609,6 +1612,7 @@ async function uploadPackage(file, many = false) {
   if (cur.data && (cur.data.units || []).length) {
     writeUnits = confirm(`${id}에는 이미 박스 ${cur.data.units.length}개가 있습니다.\n[확인] 묶음의 박스로 바꾸기 (조원이 추가한 박스·수정은 사라짐)\n[취소] 기존 박스 유지, 쪽 이미지와 정보만 올리기`);
   }
+  meta.v = Date.now(); // 쪽 이미지 버전: 다시 올리면 브라우저가 새로 받음
   const pages = meta.pages || [];
   const up = async (path, body, type) => {
     const res = await fetch('/api/upload?p=' + encodeURIComponent(path), { method: 'PUT', headers: { 'x-app-key': S.key, 'content-type': type }, body });
