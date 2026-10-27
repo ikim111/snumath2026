@@ -25,7 +25,7 @@ export async function GET(req) {
     const out = {};
     list.forEach((c, i) => {
       const d = files[i].data || {}, items = d.items || {};
-      out[c] = { done: !!d.done, ids: Object.keys(items).filter((k) => { const it = items[k] || {}; return ((it.codes && it.codes.length) || it.code) && it.lit; }) };
+      out[c] = { done: !!d.done, ids: Object.keys(items).filter((k) => { const it = items[k] || {}; return ((it.codes && it.codes.length) || it.code) && ((it.lits && it.lits.length) || it.lit); }) };
     });
     PROG.set(book, { out, t: Date.now() });
     return json(out);
