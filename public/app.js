@@ -90,7 +90,7 @@ const JK_TIPS = {
 };
 const LIT_DESC = {
   '통계·수학적 지식의 절차적 활용': '통계 지식 적용(통계적 문제 판단·수집 방법·표현·계산·용어·의미)',
-  '비판적 평가': '주장·결론·그래프·자료를 따지기',
+  '통계적 추론': '통계적 추론(reasoning): 자료·표현·주장을 근거로 따지고 판단하기',
   '의사소통': '설명·발표·토론이 활동의 중심일 때',
   '해당 없음': '세 요소 모두 해당하지 않음',
 };
@@ -111,7 +111,7 @@ const DEFAULT_CFG = () => ({
   positions: ['도입', '문제', '활동', '넓히기', '연습', '탐구', '평가', '기타'],
   stdList: ['9수04-01', '9수04-02', '9수04-03', '9수04-04', '9수04-07', '9수04-08', '9수04-09', '기타'],
   defaultKinds: ['main', 'intro', 'example'],
-  litList: ['통계·수학적 지식의 절차적 활용', '비판적 평가', '의사소통', '해당 없음'],
+  litList: ['통계·수학적 지식의 절차적 활용', '통계적 추론', '의사소통', '해당 없음'],
   books: [],
   v2: true, v3: true, v4: true, v5: true,
 });
@@ -255,7 +255,9 @@ const stageColor = (code) => {
   const order = [...new Set(fw().map((c) => c.stage))].filter((x) => x[0] !== 'X');
   return ['var(--P)', 'var(--C)', 'var(--A)', 'var(--I)', 'var(--X)'][order.indexOf(st)] || 'var(--X)';
 };
-const litList = () => S.cfg.litList || DEFAULT_CFG().litList;
+// 소양 이름 바뀜(10/28): '비판적 평가' → '통계적 추론'. 옛 이름으로 저장된 기록도 새 이름으로 읽음
+const LIT_RENAME = { '비판적 평가': '통계적 추론' };
+const litList = () => (S.cfg.litList || DEFAULT_CFG().litList).map((l) => LIT_RENAME[l] || l);
 const isCur = (id = S.book) => (S.metas[id] || {}).type === 'curriculum';
 function where(bookId, u) {
   const m = S.metas[bookId];
@@ -286,13 +288,13 @@ const unitCE = (u) => (u && Array.isArray(u.ce) && u.ce.length ? u.ce : autoCE(u
 const codesOf = (it) => (it && Array.isArray(it.codes) ? it.codes : it && it.code ? [it.code] : []);
 const LITX = '해당 없음';
 // 소양은 여러 개 가능(lits). 예전 기록은 lit 하나를 읽음. '해당 없음'은 다른 것과 같이 고를 수 없음
-const litsOf = (it) => (it && Array.isArray(it.lits) ? it.lits : it && it.lit ? [it.lit] : []);
+const litsOf = (it) => (it && Array.isArray(it.lits) ? it.lits : it && it.lit ? [it.lit] : []).map((l) => LIT_RENAME[l] || l);
 const LIT_ELEMS = () => litList().filter((l) => l !== LITX);
-const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : litShort(lit)[0]);
+const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : lit === '통계적 추론' ? '추' : litShort(lit)[0]);
 const codeStr = (it) => codesOf(it).join('·');
 // 목록·박스에 보이는 짧은 표시: 코드 + 소양 첫 글자 (예: R2 절, I1 의, R3 X)
 const markStr = (it) => [codeStr(it), ...litsOf(it).map(litMark)].filter(Boolean).join(' ');
-const LIT_CLS = { 절: 'lm-p', 비: 'lm-c', 의: 'lm-m', X: 'lm-x' };
+const LIT_CLS = { 절: 'lm-p', 추: 'lm-c', 비: 'lm-c', 의: 'lm-m', X: 'lm-x' };
 const litBadge = (lit) => { const m = litMark(lit); return m ? `<span class="lm ${LIT_CLS[m] || ''}">${m}</span>` : ''; };
 const litBadges = (it) => litsOf(it).map(litBadge).join('');
 // 색 있는 표시: 코드(단계 색) + 소양 배지
@@ -1082,7 +1084,7 @@ function fleiss(rows) { // rows: [[r1,r2,r3], ...] 모두 값 있음
   const Pe = Object.values(tot).reduce((s, x) => s + (x / (N * m)) ** 2, 0);
   return { n: N, po: all / N, k: Pe === 1 ? (Pbar === 1 ? 1 : NaN) : (Pbar - Pe) / (1 - Pe) };
 }
-// CSV: 소양 열 4개(절차적 활용·비판적 평가·의사소통·해당 없음)를 예/아니오로
+// CSV: 소양 열 4개(절차적 활용·통계적 추론·의사소통·해당 없음)를 예/아니오로
 const LIT_HEAD = () => litList().map((l) => '소양: ' + litShort(l));
 const litCols = (it) => litList().map((l) => (litsOf(it).includes(l) ? '예' : '아니오'));
 const litShort = (c) => ({ '통계·수학적 지식의 절차적 활용': '절차적 활용' })[c] || c;
