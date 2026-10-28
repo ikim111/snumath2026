@@ -1,13 +1,63 @@
-// 공통: 비밀 키 확인 + 비공개 Blob 읽기/쓰기
+// 공통: 비밀 키 확인 + 비공개 저장소(Blob 또는 Firestore) 읽기/쓰기
 import { get as vget, put as vput } from '@vercel/blob';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import nodePath from 'node:path';
 
+// 저장소 선택: STORE=firestore면 Firebase Firestore, 아니면 Vercel Blob
 // LOCAL_BLOB_DIR가 있으면 로컬 폴더를 저장소처럼 사용 (개발·시험용)
 const LOCAL = process.env.LOCAL_BLOB_DIR;
+const FS_MODE = process.env.STORE === 'firestore';
 const etagOf = (buf) => '"' + createHash('md5').update(buf).digest('hex') + '"';
+const typeOf = (path) => (path.endsWith('.json') ? 'application/json' : path.endsWith('.webp') ? 'image/webp' : path.endsWith('.png') ? 'image/png' : 'image/jpeg');
+
+// ── Firestore: 파일 하나 = 문서 하나(files/경로). 900KB 넘으면 조각 문서로 나눔 ──
+let _db = null;
+async function db() {
+  if (_db) return _db;
+  const { initializeApp, getApps, cert } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  if (sa.private_key) sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+  const app = getApps()[0] || initializeApp({ credential: cert(sa) });
+  _db = getFirestore(app);
+  return _db;
+}
+const docId = (path) => path.replace(/\//g, '|');
+const CHUNK = 900000;
+export async function fsGet(path) {
+  const d = await db();
+  const snap = await d.collection('files').doc(docId(path)).get();
+  if (!snap.exists) return null;
+  const m = snap.data();
+  let buf;
+  if (m.parts) {
+    const ps = await Promise.all(Array.from({ length: m.parts }, (_, i) => d.collection('files').doc(docId(path) + '#' + (i + 1)).get()));
+    buf = Buffer.concat(ps.map((p) => Buffer.from(p.data().b)));
+  } else buf = Buffer.from(m.b);
+  return { buf, etag: m.etag, contentType: m.ct || typeOf(path) };
+}
+export async function fsPut(path, body, opts = {}) {
+  const d = await db();
+  const buf = Buffer.from(body);
+  const etag = etagOf(buf);
+  const ref = d.collection('files').doc(docId(path));
+  const parts = buf.length > CHUNK ? Math.ceil(buf.length / CHUNK) : 0;
+  await d.runTransaction(async (tx) => {
+    const cur = await tx.get(ref);
+    if (cur.exists && opts.allowOverwrite === false) throw new Error('exists');
+    if (opts.ifMatch && (!cur.exists || cur.data().etag !== opts.ifMatch)) throw new Error('precondition failed');
+    const meta = { etag, ct: opts.contentType || typeOf(path), size: buf.length, t: Date.now(), path };
+    if (parts) {
+      for (let i = 0; i < parts; i++) tx.set(d.collection('files').doc(docId(path) + '#' + (i + 1)), { b: buf.subarray(i * CHUNK, (i + 1) * CHUNK) });
+      tx.set(ref, { ...meta, parts });
+    } else tx.set(ref, { ...meta, b: buf });
+  });
+  return { pathname: path, etag };
+}
+
 export async function blobGet(path, opts = {}) {
+  if (FS_MODE) { const r = await fsGet(path); return r ? { statusCode: 200, stream: new Blob([r.buf]).stream(), blob: { etag: r.etag, contentType: r.contentType, size: r.buf.length } } : null; }
   if (!LOCAL) return vget(path, { access: 'private', ...opts });
   try {
     const buf = await fs.readFile(nodePath.join(LOCAL, path));
@@ -16,6 +66,7 @@ export async function blobGet(path, opts = {}) {
   } catch { return null; }
 }
 export async function blobPut(path, body, opts = {}) {
+  if (FS_MODE) return fsPut(path, body, opts);
   if (!LOCAL) return vput(path, body, { access: 'private', addRandomSuffix: false, ...opts });
   const file = nodePath.join(LOCAL, path);
   let cur = null; try { cur = await fs.readFile(file); } catch {}

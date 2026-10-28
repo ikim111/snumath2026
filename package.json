@@ -2,6 +2,11 @@
   "name": "snumath2026",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
-  "dependencies": { "@vercel/blob": "^2.8.2" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.2",
+    "firebase-admin": "^12.7.0"
+  }
 }
