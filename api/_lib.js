@@ -17,7 +17,10 @@ async function db() {
   if (_db) return _db;
   const { initializeApp, getApps, cert } = await import('firebase-admin/app');
   const { getFirestore } = await import('firebase-admin/firestore');
-  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  // 키는 JSON 전체(FIREBASE_SERVICE_ACCOUNT) 또는 세 칸(PROJECT_ID·CLIENT_EMAIL·PRIVATE_KEY)으로 받음
+  let sa = {};
+  try { sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}'); } catch {}
+  if (!sa.private_key && process.env.FIREBASE_PRIVATE_KEY) sa = { project_id: process.env.FIREBASE_PROJECT_ID, client_email: process.env.FIREBASE_CLIENT_EMAIL, private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/^"|"$/g, '') };
   if (sa.private_key) sa.private_key = sa.private_key.replace(/\\n/g, '\n');
   const app = getApps()[0] || initializeApp({ credential: cert(sa) });
   _db = getFirestore(app);

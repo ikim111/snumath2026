@@ -13,7 +13,7 @@ async function blobBuf(pathname) {
 
 export async function GET(req) {
   if (!authed(req)) return deny();
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT) return json({ error: 'FIREBASE_SERVICE_ACCOUNT 없음' }, 500);
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.FIREBASE_PRIVATE_KEY) return json({ error: 'Firebase 키 없음' }, 500);
   const q = new URL(req.url).searchParams;
   const prefix = q.get('prefix') || '';
   const mode = q.get('mode') || 'list'; // list | copy | verify
