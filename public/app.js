@@ -1674,9 +1674,14 @@ async function uploadPackage(file, many = false) {
     await up(`books/${id}/meta.json`, JSON.stringify(meta), 'application/json');
     if (writeUnits) await up(`books/${id}/units.json`, JSON.stringify({ units }), 'application/json');
     if (!S.cfg.books.includes(id)) {
-      const next = { ...S.cfg, books: [...S.cfg.books, id] };
-      const r = await putStore('config/app.json', next, S.cfgEtag);
-      if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
+      // 여러 개를 한꺼번에 올릴 때 설정 저장이 충돌하면 최신 설정을 다시 읽어서 한 번 더 시도
+      for (let k = 0; k < 3; k++) {
+        if (k) { const c = await getStore('config/app.json'); if (c.data) { S.cfg = { ...S.cfg, books: c.data.books }; S.cfgEtag = c.etag; } }
+        if (S.cfg.books.includes(id)) break;
+        const next = { ...S.cfg, books: [...S.cfg.books, id] };
+        const r = await putStore('config/app.json', next, S.cfgEtag);
+        if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; break; }
+      }
     }
     S.metas[id] = meta;
     msg(`완료: ${id} (${pages.length}쪽${writeUnits ? `, 박스 ${units.length}개` : ''})`);
