@@ -2,7 +2,8 @@
 'use strict';
 
 // ───────── 기본값 ─────────
-const KINDS = { main: '본 과제', intro: '도입 질문', example: '예제', review: '이전 학년 복습' };
+// excl(분석 제외): 10/27 회의 — 교과서 '보기'는 분석에서 뺌. 도입 질문은 기본 집계 유형에서 뺌
+const KINDS = { main: '본 과제', intro: '도입 질문', example: '예제', review: '이전 학년 복습', excl: '분석 제외' };
 const FRAMEWORK_CSV = `후보,단계,코드,이름,학생이 하는 일
 우리초안,P 문제,P1,문제 파악,맥락에서 무엇이 궁금한지 생각하기(질문은 만들지 않음)
 우리초안,P 문제,P2,문제 설정,자료로 답할 수 있는 통계적 질문을 직접 만들기
@@ -110,7 +111,7 @@ const DEFAULT_CFG = () => ({
   contentElements: ['대푯값', '줄기와 잎 그림', '도수분포표', '히스토그램', '도수분포다각형', '상대도수', '통계적 탐구', '산포도', '상자그림', '산점도·상관관계', '기타'],
   positions: ['도입', '문제', '활동', '넓히기', '연습', '탐구', '평가', '기타'],
   stdList: ['9수04-01', '9수04-02', '9수04-03', '9수04-04', '9수04-07', '9수04-08', '9수04-09', '기타'],
-  defaultKinds: ['main', 'intro', 'example'],
+  defaultKinds: ['main', 'example'],
   litList: ['통계·수학적 지식의 절차적 활용', '통계적 추론', '의사소통', '해당 없음'],
   books: [],
   v2: true, v3: true, v4: true, v5: true,
@@ -340,7 +341,7 @@ async function init() {
   }
   if (needV2) {
     const fresh = DEFAULT_CFG();
-    const next = { ...S.cfg, v2: true, activeFramework: '전혜원·김래영2019', defaultKinds: ['main', 'intro', 'example'], litList: fresh.litList,
+    const next = { ...S.cfg, v2: true, activeFramework: '전혜원·김래영2019', defaultKinds: ['main', 'example'], litList: fresh.litList,
       frameworks: { ...S.cfg.frameworks, '전혜원·김래영2019': fresh.frameworks['전혜원·김래영2019'] } };
     const r = await putStore('config/app.json', next, S.cfgEtag);
     if (r.ok) { S.cfg = next; S.cfgEtag = r.etag; }
