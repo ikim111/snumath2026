@@ -736,9 +736,9 @@ function renderPanel() {
     <div class="${S.mine.done ? 'locked' : ''}">
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
-      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : ''}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
+      <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : (c.code !== 'X' && codesOf(it).includes('X') ? 'xoff' : '')}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${c.code === 'X' && codesOf(it).includes('X') ? '✕ ' : ''}${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${litsOf(it).length ? 'ok' : ''}">${litsOf(it).length ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">해당하는 것 모두 · 요소마다 따로 판단</span></div>
-    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${litsOf(it).includes(c) ? 'on' : ''} ${c === LITX ? 'litx' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${c === LITX ? '' : `<i class="cb">${litsOf(it).includes(c) ? '☑' : '☐'}</i>`}${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
+    <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${litsOf(it).includes(c) ? 'on' : (c !== LITX && litsOf(it).includes(LITX) ? 'xoff' : '')} ${c === LITX ? 'litx' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${c === LITX ? (litsOf(it).includes(LITX) ? '<i class="cb">✕</i>' : '') : `<i class="cb">${litsOf(it).includes(c) ? '☑' : '☐'}</i>`}${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
     <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점" ${S.mine.done ? 'disabled' : ''}>${esc(it.memo)}</textarea>
     </div>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
@@ -780,7 +780,10 @@ function renderPanel() {
     b.oncontextmenu = (e) => e.preventDefault();
     b.onclick = () => {
       if (b.dataset.lp === '1') { b.dataset.lp = ''; return; }
-      const set = new Set(codesOf(it)); set.has(b.dataset.code) ? set.delete(b.dataset.code) : set.add(b.dataset.code);
+      // 해당 없음(X)을 고르면 나머지가 풀리고, 다른 코드를 고르면 X가 풀림
+      const v = b.dataset.code; let set = new Set(codesOf(it));
+      if (v === 'X') set = set.has('X') ? new Set() : new Set(['X']);
+      else { set.delete('X'); set.has(v) ? set.delete(v) : set.add(v); }
       const order = codeList().map((c) => c.code); const codes = [...set].sort((a, c) => order.indexOf(a) - order.indexOf(c));
       const code = b.dataset.code;
       setItem(u.id, { codes, code: codes[0] || '' });
