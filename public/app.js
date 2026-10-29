@@ -400,7 +400,9 @@ async function loadMetas() {
 }
 function bookLabel(id) {
   const m = S.metas[id] || {}, pg = S.prog[id];
-  const name = isCur(id) ? bookName(id) : `${m.period || ''} ${m.title || id}`.trim(); // 출판사는 묶음 제목에 있음
+  // 고른 뒤에는 묶음 제목이 안 보이므로 이름 앞에 [출판사]를 붙임
+  const pub = (m.publisher || '').replace(/교육$/, '').replace(/\(.*\)/, '');
+  const name = isCur(id) ? bookName(id) : `${pub ? `[${pub}] ` : ''}${m.period || ''} ${m.title || id}`.trim();
   // 내 것만: 완료 누르면 '✓ 완료', 아니면 (한 개수/전체)
   const fin = pg && pg.by && pg.by[S.coder] && pg.by[S.coder].fin;
   return name + (pg && pg.total ? (fin ? '  ✓ 완료' : `  (${pg.done}/${pg.total})`) : '');
