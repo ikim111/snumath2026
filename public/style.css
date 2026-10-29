@@ -337,3 +337,9 @@ table.ov tr.on td { background: var(--accent-soft); }
 .unit-list .row.dis, #curView .crow.dis { background: #FDEBD6; }
 .unit-list .row.dis.sel, #curView .crow.dis.sel { outline: 2px solid #E07B12; }
 .distag { display: inline-block; background: #E07B12; color: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-right: 4px; line-height: 18px; vertical-align: middle; }
+/* 세 명 같지만 새 규칙으로 고칠 만한 단위: 파랑 */
+.box.rule { background: rgba(47, 95, 179, .18); border-color: #2F5FB3 !important; }
+.box.rule .tag { background: #2F5FB3; color: #fff; }
+.unit-list .row.rule, #curView .crow.rule { background: #E3ECFA; }
+.ruletag { display: inline-block; background: #2F5FB3; color: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-right: 4px; line-height: 18px; vertical-align: middle; }
+.rulebox { background: #E3ECFA; color: #1F3F7A; border-left: 3px solid #2F5FB3; padding: 6px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 8px; }

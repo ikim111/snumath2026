@@ -531,6 +531,30 @@ function disOf(u) {
   return parts.length ? parts : null;
 }
 const isDis = (u) => !!disOf(u);
+// 세 명이 같지만 새 규칙(10/29)으로 보면 고칠 만한 단위: 이유 목록을 돌려줌. 내가 고치면 사라짐
+function ruleOf(u) {
+  if (!S.others || !isRequired(u)) return null;
+  if (!isCur() && pubName((S.metas[S.book] || {}).publisher) !== '미래엔') return null;
+  const mine = S.mine.items[u.id];
+  const others = Object.values(S.others).map((o) => o[u.id]);
+  const all = [mine, ...others];
+  if (all.some((it) => !it || !isDone(it))) return null;
+  if ((mine.t || 0) > Math.max(...others.map((it) => it.t || 0))) return null;
+  const sig = (it) => [...codesOf(it)].sort().join('+') + '/' + [...litsOf(it)].sort().join('+');
+  if (new Set(all.map(sig)).size > 1) return null; // 다른 건 주황(disOf)에서 표시
+  const cs = codesOf(mine), ls = litsOf(mine);
+  const t = `${u.summary || ''} ${u.orig || ''}`;
+  const has = (l) => ls.includes(l);
+  const say = /말하|말해|이야기|토론|토의|발표/.test(t);
+  const out = [];
+  if (has('의사소통') && !say && /설명|쓰시오|쓰기|글로/.test(t)) out.push('설명·쓰기는 의사소통 아님');
+  if (!has('의사소통') && say && !cs.includes('X')) out.push('말하기·토론은 의사소통');
+  if (has('통계·수학적 지식의 절차적 활용') && cs.length && cs.every((c) => /^[FP]/.test(c))) out.push('수집·계획·문제 설정엔 절차 안 붙임');
+  if (/%|백분율|퍼센트/.test(t) && cs.includes('R2') && !cs.includes('R3')) out.push('퍼센트는 R3');
+  if (cs.includes('X') && ls.some((l) => l !== LITX)) out.push('X인데 소양이 있음');
+  return out.length ? out : null;
+}
+const ruleTag = (u) => { const r = ruleOf(u); return r ? `<span class="ruletag" title="${esc(r.join(' / '))}">규칙 확인</span>` : ''; };
 const disTag = (u) => { const d = disOf(u); return d ? `<span class="distag">${d.join('·')} 다름</span>` : ''; };
 
 function sortUnits() {
@@ -560,7 +584,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${disTag(u)}${markHtml(it)}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${disTag(u)}${ruleTag(u)}${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -622,7 +646,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', isDis(u) ? 'dis' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -726,6 +750,7 @@ function renderPanel() {
   const canCode = !!S.coder;
 
   const reqHere = isRequired(u);
+  const ruleWhy = u ? ruleOf(u) : null;
   const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요(미완료)' : litsOf(it).length ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
   P.innerHTML = `
     <div class="u-head">
@@ -761,6 +786,7 @@ function renderPanel() {
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
     ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
     <div class="${S.mine.done ? 'locked' : ''}">
+    ${ruleWhy ? `<div class="rulebox">세 명 같지만 새 규칙으로 확인: ${esc(ruleWhy.join(' · '))}</div>` : ''}
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${(disOf(u) || []).includes('코드') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : (c.code !== 'X' && codesOf(it).includes('X') ? 'xoff' : '')}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${c.code === 'X' && codesOf(it).includes('X') ? '✕ ' : ''}${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
@@ -836,14 +862,14 @@ function renderList() {
   const req = S.units.filter(isRequired);
   const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
   if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
-  const dis = S.others ? req.filter(isDis).length : 0;
-  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}${S.others ? ` · 세 명 다름 ${dis}` : ''}` : '';
+  const dis = S.others ? req.filter(isDis).length : 0, rul = S.others ? req.filter((u) => ruleOf(u)).length : 0;
+  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}${S.others ? ` · 세 명 다름 ${dis} · 규칙 확인 ${rul}` : ''}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
-    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}">
+    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c">${disTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
+      <span class="c">${disTag(u)}${ruleTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
