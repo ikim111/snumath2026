@@ -531,6 +531,11 @@ function disOf(u) {
   return parts.length ? parts : null;
 }
 const isDis = (u) => !!disOf(u);
+// 교과서 글자를 읽어 찾은 것(요약만으로는 안 보이는 경우)
+const RULE_HINTS = {
+  m151a_006: "‘몇 세인지 말해 보자’ → 의사소통",
+  m151b_007: '앞에 모둠 토의가 있음 → 의사소통 (6-2 #6 합의 메모)',
+};
 // 세 명이 같지만 새 규칙(10/29)으로 보면 고칠 만한 단위: 이유 목록을 돌려줌. 내가 고치면 사라짐
 function ruleOf(u) {
   if (!S.others || !isRequired(u)) return null;
@@ -543,10 +548,10 @@ function ruleOf(u) {
   const sig = (it) => [...codesOf(it)].sort().join('+') + '/' + [...litsOf(it)].sort().join('+');
   if (new Set(all.map(sig)).size > 1) return null; // 다른 건 주황(disOf)에서 표시
   const cs = codesOf(mine), ls = litsOf(mine);
-  const t = `${u.summary || ''} ${u.orig || ''}`;
+  const t = u.summary || ''; // 교육과정 원문(orig)은 나눈 다른 문장까지 들어 있어 쓰지 않음
   const has = (l) => ls.includes(l);
   const say = /말하|말해|이야기|토론|토의|발표/.test(t);
-  const out = [];
+  const out = RULE_HINTS[u.id] ? [RULE_HINTS[u.id]] : [];
   if (has('의사소통') && !say && /설명|쓰시오|쓰기|글로/.test(t)) out.push('설명·쓰기는 의사소통 아님');
   if (!has('의사소통') && say && !cs.includes('X')) out.push('말하기·토론은 의사소통');
   if (has('통계·수학적 지식의 절차적 활용') && cs.length && cs.every((c) => /^[FP]/.test(c))) out.push('수집·계획·문제 설정엔 절차 안 붙임');
