@@ -515,14 +515,23 @@ async function loadMine() {
     if (a.opened && a.data) S.others = Object.fromEntries(Object.entries(a.data).filter(([c]) => c !== S.coder).map(([c, d]) => [c, (d && d.items) || {}]));
   } catch {}
 }
-// 세 명 코딩(문제해결 코드 + 소양)이 모두 같지 않으면 true. 내가 고치면 바로 다시 계산됨
-function isDis(u) {
-  if (!S.others || !isRequired(u)) return false;
-  const sig = (it) => { it = it || {}; return [...codesOf(it)].sort().join('+') + '/' + [...litsOf(it)].sort().join('+'); };
-  const all = [S.mine.items[u.id], ...Object.values(S.others).map((o) => o[u.id])];
-  if (all.some((it) => !it || !isDone(it))) return false;
-  return new Set(all.map(sig)).size > 1;
+// 세 명 코딩 비교: 교육과정·미래엔만. 다른 부분('코드'·'소양')을 돌려줌.
+// 내가 그 단위를 다른 두 사람보다 나중에 고쳤으면(=확인하고 수정함) 표시하지 않음
+function disOf(u) {
+  if (!S.others || !isRequired(u)) return null;
+  if (!isCur() && pubName((S.metas[S.book] || {}).publisher) !== '미래엔') return null;
+  const mine = S.mine.items[u.id];
+  const others = Object.values(S.others).map((o) => o[u.id]);
+  const all = [mine, ...others];
+  if (all.some((it) => !it || !isDone(it))) return null;
+  if ((mine.t || 0) > Math.max(...others.map((it) => it.t || 0))) return null;
+  const cs = new Set(all.map((it) => [...codesOf(it)].sort().join('+')));
+  const ls = new Set(all.map((it) => [...litsOf(it)].sort().join('+')));
+  const parts = [cs.size > 1 ? '코드' : '', ls.size > 1 ? '소양' : ''].filter(Boolean);
+  return parts.length ? parts : null;
 }
+const isDis = (u) => !!disOf(u);
+const disTag = (u) => { const d = disOf(u); return d ? `<span class="distag">${d.join('·')} 다름</span>` : ''; };
 
 function sortUnits() {
   if (isCur()) return;
@@ -551,7 +560,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${markHtml(it)}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${disTag(u)}${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -752,10 +761,10 @@ function renderPanel() {
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
     ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
     <div class="${S.mine.done ? 'locked' : ''}">
-    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
+    <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${(disOf(u) || []).includes('코드') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : (c.code !== 'X' && codesOf(it).includes('X') ? 'xoff' : '')}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${c.code === 'X' && codesOf(it).includes('X') ? '✕ ' : ''}${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
-    <div class="step"><span class="stepn ${litsOf(it).length ? 'ok' : ''}">${litsOf(it).length ? '✓' : '2'}</span>통계적 소양 ${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">해당하는 것 모두 · 요소마다 따로 판단</span></div>
+    <div class="step"><span class="stepn ${litsOf(it).length ? 'ok' : ''}">${litsOf(it).length ? '✓' : '2'}</span>통계적 소양 ${(disOf(u) || []).includes('소양') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">해당하는 것 모두 · 요소마다 따로 판단</span></div>
     <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${litsOf(it).includes(c) ? 'on' : (c !== LITX && litsOf(it).includes(LITX) ? 'xoff' : '')} ${c === LITX ? 'litx' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${c === LITX ? (litsOf(it).includes(LITX) ? '<i class="cb">✕</i>' : '') : `<i class="cb">${litsOf(it).includes(c) ? '☑' : '☐'}</i>`}${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
     <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점" ${S.mine.done ? 'disabled' : ''}>${esc(it.memo)}</textarea>
     </div>
@@ -834,7 +843,7 @@ function renderList() {
     return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c">${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
+      <span class="c">${disTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
