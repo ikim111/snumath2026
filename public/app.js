@@ -398,10 +398,12 @@ async function loadMetas() {
   const rs = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/meta.json`)));
   S.cfg.books.forEach((id, i) => { if (rs[i].data) S.metas[id] = rs[i].data; });
 }
+// 출판사 이름 통일: '동아(강)'·'동아' → 동아, '비상교육' → 비상
+const pubName = (p) => (/^동아/.test(p || '') ? '동아' : /^비상/.test(p || '') ? '비상' : p || '');
 function bookLabel(id) {
   const m = S.metas[id] || {}, pg = S.prog[id];
   // 고른 뒤에는 묶음 제목이 안 보이므로 이름 앞에 [출판사]를 붙임
-  const pub = (m.publisher || '').replace(/교육$/, '').replace(/\(.*\)/, '');
+  const pub = pubName(m.publisher);
   const name = isCur(id) ? bookName(id) : `${pub ? `[${pub}] ` : ''}${m.period || ''} ${m.title || id}`.trim();
   // 내 것만: 완료 누르면 '✓ 완료', 아니면 (한 개수/전체)
   const fin = pg && pg.by && pg.by[S.coder] && pg.by[S.coder].fin;
@@ -437,10 +439,10 @@ fillHeader.books = function () {
   S.cfg.books.forEach((id) => {
     const m = S.metas[id] || {};
     // 두 가지 틀: (1) 교육과정 (2) 출판사별 교과서
-    const g = isCur(id) ? '교육과정' : (m.publisher || '기타');
+    const g = isCur(id) ? '교육과정' : (pubName(m.publisher) || '기타');
     let x = groups.find((y) => y.g === g); if (!x) groups.push(x = { g, ids: [] }); x.ids.push(id);
   });
-  const ORDER = ['교육과정', '미래엔', '비상교육', '동아(강)'];
+  const ORDER = ['교육과정', '미래엔', '비상', '동아'];
   const rank = (g) => (ORDER.indexOf(g) < 0 ? 99 : ORDER.indexOf(g));
   groups.sort((a, b) => rank(a.g) - rank(b.g) || a.g.localeCompare(b.g));
   const key = (id) => { const m = S.metas[id] || {}; return `${m.period || ''} ${m.title || id}`; };
@@ -506,6 +508,20 @@ async function loadMine() {
   const r = await api(`/api/codings?book=${encodeURIComponent(S.book)}&coder=${encodeURIComponent(S.coder)}`);
   if (r.data) { S.mine = { done: false, items: {}, ...r.data }; S.mineEtag = r.etag; }
   S.mineSig = S.book + '|' + S.coder + '|' + JSON.stringify([S.mine.done, S.mine.items]);
+  // 비교가 열린 목록이면 다른 두 사람 코딩을 받아 둠(세 명 불일치 표시용)
+  S.others = null;
+  try {
+    const a = await api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`);
+    if (a.opened && a.data) S.others = Object.fromEntries(Object.entries(a.data).filter(([c]) => c !== S.coder).map(([c, d]) => [c, (d && d.items) || {}]));
+  } catch {}
+}
+// 세 명 코딩(문제해결 코드 + 소양)이 모두 같지 않으면 true. 내가 고치면 바로 다시 계산됨
+function isDis(u) {
+  if (!S.others || !isRequired(u)) return false;
+  const sig = (it) => { it = it || {}; return [...codesOf(it)].sort().join('+') + '/' + [...litsOf(it)].sort().join('+'); };
+  const all = [S.mine.items[u.id], ...Object.values(S.others).map((o) => o[u.id])];
+  if (all.some((it) => !it || !isDone(it))) return false;
+  return new Set(all.map(sig)).size > 1;
 }
 
 function sortUnits() {
@@ -535,7 +551,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${markHtml(it)}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -597,7 +613,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', isDis(u) ? 'dis' : ''].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -811,10 +827,11 @@ function renderList() {
   const req = S.units.filter(isRequired);
   const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
   if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
-  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}` : '';
+  const dis = S.others ? req.filter(isDis).length : 0;
+  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}${S.others ? ` · 세 명 다름 ${dis}` : ''}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
-    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'}" data-id="${u.id}">
+    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${isDis(u) ? 'dis' : ''}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
       <span class="c">${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;

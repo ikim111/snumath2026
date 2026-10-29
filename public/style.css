@@ -330,3 +330,9 @@ table.ov tr.on td { background: var(--accent-soft); }
 
 /* 해당 없음(X)을 고르면 나머지 버튼은 흐리게 */
 .codes button.xoff, .lit-grid button.xoff { opacity: .4; }
+
+/* 세 명 코딩이 다른 단위: 주황으로 칠함(고쳐서 같아지면 사라짐) */
+.box.dis { background: rgba(240, 140, 30, .28); border-color: #E07B12 !important; }
+.box.dis .tag { background: #E07B12; color: #fff; }
+.unit-list .row.dis, #curView .crow.dis { background: #FDEBD6; }
+.unit-list .row.dis.sel, #curView .crow.dis.sel { outline: 2px solid #E07B12; }
