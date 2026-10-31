@@ -500,6 +500,17 @@ async function selectBook(id) {
   const p = Number(ls.get('page:' + id)); if (p && S.metas[id] && p < S.metas[id].pages.length) S.page = p;
   renderAll();
   loadProgress(); // 3분이 지났을 때만 진행률 새로 받기
+  prefetchPages(id);
+}
+
+// 책을 고르면 나머지 쪽 이미지를 뒤에서 3장씩 미리 받아 둠(지금 쪽 가까운 것부터). 다른 책으로 바꾸면 멈춤
+async function prefetchPages(id) {
+  const m = S.metas[id]; if (!m || !m.pages) return;
+  const order = m.pages.map((pg, i) => [Math.abs(i - S.page), pg.file]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+  let k = 0;
+  const worker = async () => { while (k < order.length && S.book === id) { const f = order[k++]; try { await pageImage(id, f); } catch {} } };
+  await new Promise((r) => setTimeout(r, 800)); // 지금 쪽이 먼저 뜨도록 잠깐 기다림
+  await Promise.all([worker(), worker(), worker()]);
 }
 
 async function loadMine() {
