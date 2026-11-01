@@ -1765,7 +1765,7 @@ async function uploadPackage(file, many = false) {
 
 init().catch((e) => { console.error(e); saveState('오류: ' + e.message, true); });
 
-// ───────── 인쇄: 지금 고른 책 전체 (쪽 이미지 + 상자 번호 + 지금 코더의 코드·소양) ─────────
+// ───────── 인쇄: 지금 고른 책 전체를 펼침면(두 쪽씩)으로. 상자 번호 + 상자 오른쪽 아래에 지금 코더의 코드·소양 ─────────
 const litWord = (l) => (l === '통계·수학적 지식의 절차적 활용' ? '절차' : l === '통계적 추론' ? '추론' : l);
 async function printBook() {
   if (!S.book || isCur()) { toast('교과서를 먼저 고르세요'); return; }
@@ -1774,15 +1774,22 @@ async function printBook() {
   const req = S.units.filter(isRequired);
   const byPage = new Map();
   req.forEach((u) => { if (!byPage.has(u.page)) byPage.set(u.page, []); byPage.get(u.page).push(u); });
-  const pages = [...byPage.keys()].sort((a, b) => a - b);
-  const urls = await Promise.all(pages.map((p) => pageImage(S.book, m.pages[p].file).catch(() => '')));
+  // 0-1, 2-3 … 순서로 두 쪽씩 묶고, 단위가 하나도 없는 펼침면은 건너뜀
+  const spreads = [];
+  for (let i = 0; i < m.pages.length; i += 2) { const ps = [i, i + 1].filter((p) => p < m.pages.length); if (ps.some((p) => byPage.has(p))) spreads.push(ps); }
+  const need = [...new Set(spreads.flat())];
+  const urlOf = {}; await Promise.all(need.map(async (p) => { urlOf[p] = await pageImage(S.book, m.pages[p].file).catch(() => ''); }));
   const head = `${esc(bookLabel(S.book))} · 코더 ${esc(S.coder || '-')} · ${new Date().toLocaleDateString('ko-KR')}`;
-  const html = pages.map((p, i) => {
-    const us = byPage.get(p);
-    const boxes = us.map((u) => { const r = u.r || [0, 0, 0, 0]; return `<div class="pbox" style="left:${r[0] * 100}%;top:${r[1] * 100}%;width:${r[2] * 100}%;height:${r[3] * 100}%"><span>#${unitNo(u)}</span></div>`; }).join('');
-    const rows = us.map((u) => { const it = S.mine.items[u.id]; return `<tr><td class="n">#${unitNo(u)}</td><td class="c">${esc(codesOf(it).join('+') || '—')}</td><td class="l">${esc(litsOf(it).map(litWord).join('+') || '—')}</td><td class="s">${esc(u.summary || u.task || '')}</td><td class="memo"></td></tr>`; }).join('');
-    return `<section class="pp"><div class="phead">${head} · ${esc(m.pages[p].label)}쪽</div><div class="pbody"><div class="pimg"><img src="${urls[i]}">${boxes}</div><table class="plist"><thead><tr><th>번호</th><th>코드</th><th>소양</th><th>요약</th><th>메모</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
-  }).join('');
+  const pageHtml = (p) => {
+    const us = byPage.get(p) || [];
+    const marks = us.map((u) => {
+      const r = u.r || [0, 0, 0, 0]; const it = S.mine.items[u.id];
+      const tag = `#${unitNo(u)} ${codesOf(it).join('+') || '—'} · ${litsOf(it).map(litWord).join('+') || '—'}`;
+      return `<div class="pbox" style="left:${r[0] * 100}%;top:${r[1] * 100}%;width:${r[2] * 100}%;height:${r[3] * 100}%"><span>#${unitNo(u)}</span></div><div class="ptag" style="left:${(r[0] + r[2]) * 100}%;top:${(r[1] + r[3]) * 100}%">${esc(tag)}</div>`;
+    }).join('');
+    return `<div class="pimg"><img src="${urlOf[p]}">${marks}</div>`;
+  };
+  const html = spreads.map((ps) => `<section class="pp"><div class="phead">${head} · ${ps.map((p) => esc(m.pages[p].label)).join('–')}쪽</div><div class="pbody">${ps.map(pageHtml).join('')}${ps.length < 2 ? '<div class="pimg"></div>' : ''}</div></section>`).join('');
   let v = document.getElementById('printView'); if (v) v.remove();
   v = document.createElement('div'); v.id = 'printView'; v.innerHTML = html; document.body.appendChild(v);
   await Promise.all([...v.querySelectorAll('img')].map((im) => (im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; }))));
