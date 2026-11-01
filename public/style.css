@@ -350,11 +350,12 @@ table.ov tr.on td { background: var(--accent-soft); }
   body>*:not(#printView){display:none!important}
   #printView{display:block}
   @page{size:A4 landscape;margin:7mm}
-  .pp{page-break-after:always;break-after:page;height:194mm;display:flex;flex-direction:column}
+  .pp{page-break-after:always;break-after:page;height:190mm;overflow:hidden;display:flex;flex-direction:column}
+  .pp:last-child{page-break-after:auto;break-after:auto}
   .phead{font-size:9pt;font-weight:700;margin-bottom:2mm}
   .pbody{display:flex;gap:4mm;flex:1;min-height:0;justify-content:center}
   .pimg{position:relative;flex:1;max-width:50%;align-self:flex-start}
-  .pimg img{width:100%;max-height:186mm;object-fit:contain;display:block;border:1px solid #999}
+  .pimg img{width:100%;max-height:182mm;object-fit:contain;display:block;border:1px solid #999}
   .pbox{position:absolute;border:1.3px solid #d00;box-sizing:border-box}
   .pbox span{position:absolute;left:-1px;top:-1px;background:#d00;color:#fff;font-size:7pt;font-weight:700;padding:0 2px;line-height:1.25}
   .ptag{position:absolute;transform:translate(-100%,1px);background:#fff3c4;border:1px solid #c90;color:#000;font-size:7pt;font-weight:700;padding:0 3px;white-space:nowrap;line-height:1.3;-webkit-print-color-adjust:exact;print-color-adjust:exact}
