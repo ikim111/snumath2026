@@ -910,7 +910,7 @@ function setItem(id, patch, rerender = true) {
   scheduleMine();
   if (rerender) { renderPanel(); renderBoxes(); renderList(); renderPages(); renderCur(); renderDone(); }
 }
-const SAVE_DELAY = 8000; // 자동 저장 간격(ms): Blob 쓰기 횟수를 줄이려고 길게
+const SAVE_DELAY = 8000; // 자동 저장 간격(ms): 저장소 쓰기 횟수를 줄이려고 길게
 function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(() => { mineTimer = null; saveMine(); }, SAVE_DELAY); }
 async function saveMine(retry = true) {
   if (!S.coder || !S.book) return;

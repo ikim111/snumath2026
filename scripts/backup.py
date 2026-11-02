@@ -1,9 +1,9 @@
-"""전체 백업 + Blob·Firestore 대조 (맥북에서 실행)
+"""전체 백업 (맥북에서 실행)
 
   python3 scripts/backup.py            # 사이트 주소는 아래 SITE, 키는 실행할 때 입력(화면에 안 보임)
 
-backup/<날짜>_firestore/, backup/<날짜>_blob/ 에 원래 경로대로 저장하고
-manifest.json(경로·크기·md5)과 대조 결과 compare.json을 남김. 화면에는 개수만 출력(코드 값은 출력하지 않음).
+backup/<날짜_시각>_firestore/ 에 원래 경로대로 저장하고 manifest.json(경로·크기·md5)을 남김.
+화면에는 개수만 출력(코드 값은 출력하지 않음). 11/2 Blob→Firestore 대조 결과는 backup/2026-11-02_compare.json
 """
 import getpass, hashlib, json, os, sys, time, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -87,34 +87,14 @@ def counts(out, man):
 
 
 def main():
-    day = time.strftime('%Y-%m-%d')
-    res = {}
-    for src in ('firestore', 'blob'):
-        out = os.path.join(ROOT, f'{day}_{src}')
-        os.makedirs(out, exist_ok=True)
-        man, bad = backup(src, out)
-        res[src] = (out, man, bad)
-        print(f'{src}: 파일 {len(man)}개, {sum(m["size"] for m in man) / 1e6:.1f}MB, 실패 {len(bad)}개')
-        for b in bad:
-            print('  !', b)
-
-    (fo, fm, _), (bo, bm, _) = res['firestore'], res['blob']
-    same = [p for p in fm if p in bm and fm[p]['md5'] == bm[p]['md5']]
-    diff = sorted(p for p in fm if p in bm and fm[p]['md5'] != bm[p]['md5'])
-    only_fs = sorted(p for p in fm if p not in bm)
-    only_blob = sorted(p for p in bm if p not in fm)
-    fc, bc = counts(fo, fm), counts(bo, bm)
-    rows = [{'p': p, 'firestore': fc.get(p), 'blob': bc.get(p)} for p in sorted(set(fc) | set(bc))]
-    cmp = {'same': len(same), 'diff': diff, 'only_firestore': only_fs, 'only_blob': only_blob, 'counts': rows}
-    with open(os.path.join(ROOT, f'{day}_compare.json'), 'w', encoding='utf-8') as fh:
-        json.dump(cmp, fh, ensure_ascii=False, indent=1)
-    print(f'\n같음 {len(same)} / 내용 다름 {len(diff)} / Firestore에만 {len(only_fs)} / Blob에만 {len(only_blob)}')
-    for name, ps in (('내용 다름', diff), ('Firestore에만', only_fs), ('Blob에만', only_blob)):
-        if ps:
-            print(f'[{name}]', *ps[:40], sep='\n  ')
-    print('\n[개수: 경로 / Firestore / Blob]')
-    for r in rows:
-        print(f"  {r['p']}  {r['firestore']}  {r['blob']}")
+    out = os.path.join(ROOT, time.strftime('%Y-%m-%d_%H%M') + '_firestore')
+    os.makedirs(out, exist_ok=True)
+    man, bad = backup('firestore', out)
+    print(f'firestore: 파일 {len(man)}개, {sum(m["size"] for m in man.values()) / 1e6:.1f}MB, 실패 {len(bad)}개 → {out}')
+    for b in bad:
+        print('  !', b)
+    c = counts(out, man)
+    print('[개수] 박스', sum(v for p, v in c.items() if p.startswith('books/')), '/ 개인 코딩한 단위', sum(v for p, v in c.items() if p.startswith('codings/')), '/ 최종 코드', sum(v for p, v in c.items() if p.startswith('final/')))
 
 
 if __name__ == '__main__':

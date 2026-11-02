@@ -1,13 +1,11 @@
-// 공통: 비밀 키 확인 + 비공개 저장소(Blob 또는 Firestore) 읽기/쓰기
-import { get as vget, put as vput } from '@vercel/blob';
+// 공통: 비밀 키 확인 + 비공개 저장소(Firestore) 읽기/쓰기
 import { timingSafeEqual, createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import nodePath from 'node:path';
 
-// 저장소 선택: STORE=firestore면 Firebase Firestore, 아니면 Vercel Blob
+// 저장소: Firebase Firestore (11/2 Vercel Blob에서 이전 완료)
 // LOCAL_BLOB_DIR가 있으면 로컬 폴더를 저장소처럼 사용 (개발·시험용)
 const LOCAL = process.env.LOCAL_BLOB_DIR;
-const FS_MODE = process.env.STORE === 'firestore';
 const etagOf = (buf) => '"' + createHash('md5').update(buf).digest('hex') + '"';
 const typeOf = (path) => (path.endsWith('.json') ? 'application/json' : path.endsWith('.webp') ? 'image/webp' : path.endsWith('.png') ? 'image/png' : 'image/jpeg');
 
@@ -63,8 +61,7 @@ export async function fsPut(path, body, opts = {}) {
 }
 
 export async function blobGet(path, opts = {}) {
-  if (FS_MODE) { const r = await fsGet(path); return r ? { statusCode: 200, stream: new Blob([r.buf]).stream(), blob: { etag: r.etag, contentType: r.contentType, size: r.buf.length } } : null; }
-  if (!LOCAL) return vget(path, { access: 'private', ...opts });
+  if (!LOCAL) { const r = await fsGet(path); return r ? { statusCode: 200, stream: new Blob([r.buf]).stream(), blob: { etag: r.etag, contentType: r.contentType, size: r.buf.length } } : null; }
   try {
     const buf = await fs.readFile(nodePath.join(LOCAL, path));
     const type = path.endsWith('.json') ? 'application/json' : path.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
@@ -72,8 +69,7 @@ export async function blobGet(path, opts = {}) {
   } catch { return null; }
 }
 export async function blobPut(path, body, opts = {}) {
-  if (FS_MODE) return fsPut(path, body, opts);
-  if (!LOCAL) return vput(path, body, { access: 'private', addRandomSuffix: false, ...opts });
+  if (!LOCAL) return fsPut(path, body, opts);
   const file = nodePath.join(LOCAL, path);
   let cur = null; try { cur = await fs.readFile(file); } catch {}
   if (cur && opts.allowOverwrite === false) throw new Error('exists');
@@ -106,7 +102,7 @@ export function safePath(p) {
   return p;
 }
 
-// 서버 메모리 캐시: 잘 안 바뀌는 파일(설정·교과서 정보·교육과정)만 5분 기억 → Blob 읽기 줄이기
+// 서버 메모리 캐시: 잘 안 바뀌는 파일(설정·교과서 정보·교육과정)만 5분 기억 → 저장소 읽기 줄이기
 // 박스(units)·최종 코드(final)·개인 코딩(codings)은 여러 명이 고치고 etag로 충돌을 막으므로 절대 캐시하지 않음
 const MEM = new Map();
 const CACHEABLE = (p) => /^config\/[^/]+\.json$/.test(p) || /^books\/[^/]+\/meta\.json$/.test(p) || /^curriculum\/[^/]+\.json$/.test(p);

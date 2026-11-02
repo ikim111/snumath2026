@@ -1,4 +1,4 @@
-// 교과서 쪽 이미지 (비공개 Blob에서 키 확인 후 전달)
+// 교과서 쪽 이미지 (비공개 저장소에서 키 확인 후 전달)
 import { authed, deny, json, safePath, blobGet } from './_lib.js';
 
 export async function GET(req) {
