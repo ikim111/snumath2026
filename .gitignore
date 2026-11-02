@@ -6,3 +6,6 @@ node_modules
 *.jpg
 *.png
 private/
+
+# 전체 백업(교과서 이미지·코딩 값 포함) — 저장소에 올리지 않음
+backup/

@@ -28,6 +28,7 @@ async function db() {
   _db = getFirestore(app);
   return _db;
 }
+export const fsDb = db;
 const docId = (path) => path.replace(/\//g, '|');
 const CHUNK = 900000;
 export async function fsGet(path) {
