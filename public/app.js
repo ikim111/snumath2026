@@ -481,6 +481,7 @@ function bindTabs() {
     if (t === 'compare') renderCompare();
     if (t === 'stats') renderStats();
     if (t === 'settings') renderSettings();
+    if (t === 'agree') renderAgree();
     if (t === 'code') renderAll();
   };
 }
@@ -1796,4 +1797,102 @@ async function printBook() {
   const done = () => { v.remove(); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
   window.print();
+}
+
+// ───────── 합의 탭: 조 회의 합의(10/27)와 김형준 기준을 교과서 예시와 함께 보여 줌 (읽기 전용) ─────────
+// ex: [책 id, 단위 id] — 쪽 이미지에서 그 상자만 잘라 보여 줌. 교육과정은 문장만.
+const AGREE = {
+  group: {
+    title: '① 조 전체 합의', tag: '10/27 회의', cls: 'ok',
+    note: '10/27 조 회의에서 합의 보드로 정한 내용. 아래 단위 표는 사이트의 최종 코드에서 바로 불러옴.',
+    rules: [
+      { t: "'말하시오'는 의사소통, '설명하시오'는 의사소통 아님", ex: [['M09-1', 'm091_023']] },
+      { t: "교과서 '보기'와 대단원 도입 질문은 분석 대상에서 제외", ex: [['M09-2', 'm092_067'], ['M09-2', 'm092_049']] },
+      { t: '상대도수 구하기 R2, 퍼센트 구하기 R3', ex: [['M09-2', 'm092_059']] },
+      { t: '빈 도수 구하기는 도수분포표로 변환이라 R2', ex: [['M09-2', 'm092_072']] },
+      { t: '유용성·필요성 인식은 X / 해당 없음', ex: [['C2022', 'c22014']] },
+      { t: "'특성과 목적에 맞게'는 R1, '나타낸다'는 R2", ex: [['C2022', 'c22022']] },
+      { t: '앞에 토의가 있으면 의사소통', ex: [['M15-1b', 'm151b_005']] },
+      { t: "소양 '비판적 평가' → '통계적 추론(reasoning)'으로 이름 변경 (회의 땐 검토 중, 10/28 사이트 반영)", ex: [['M09-2', 'm092_061']] },
+    ],
+  },
+  mine: {
+    title: '② 형준 기준', tag: '조원 확인 전', cls: 'wa',
+    note: '김형준이 전체 코딩을 점검하며 정한 기준(10/29~11/1). 조원과 아직 합의하지 않음.',
+    rules: [
+      { t: '절차 = 교과서에서 이미 가르친 방법을 그대로 적용 / 추론 = 이유·근거 설명, 남의 주장 평가, 아직 안 배운 상황에서 스스로 해석', ex: [['M22-3', 'm223_026']] },
+      { t: "같은 발문도 앞에서 가르쳤는지로 판단. 생각열기도 이전 학년 방법으로 풀리면 절차, 새 방법을 스스로 만들어야 하면 추론", ex: [['M22-4', 'm224_004'], ['D22-1f', 'd221f_000']] },
+      { t: '한 단위에 해당하는 소양을 모두 체크 (중복 코딩)', ex: [['M09-1', 'm091_012']] },
+      { t: "의사소통 = 토론·토의·발표·모둠 협의 + '말하시오' (회의 합의와 같음)", ex: [['M22-4', 'm224_004']] },
+      { t: "'~다고 할 수 있는지' 맥락 속 결론 = R3+I1", ex: [['D22-1e', 'd221e_011']] },
+      { t: "이미 구한 대푯값 중 고르기 = R1, '택하여 구하고' = R1+R2", ex: [['D22-1a', 'd221a_027']] },
+      { t: '표·그래프를 잘못 만든 것 찾기 = R3, 남의 해석·설명 오류 찾기 = I2', ex: [['M22-3', 'm223_026'], ['M22-4', 'm224_008']] },
+      { t: '자료 없이 배경지식만으로 상관관계 추측 = X / 해당 없음', ex: [['D15-3c', 'd153c_014']] },
+      { t: '앞 활동 결과를 모아 보고서·발표 자료 만들기 = X (발표가 있으면 소양 의사소통)', ex: [['D15-3c', 'd153c_046']] },
+      { t: "분석 범위: 산포도·상자그림·상관관계 포함 (노션 개요의 '산포도 제외'와 다름)", ex: [['D22-3b', 'd223b_028']] },
+      { t: '확인 필요: 소단원 생각열기도 회의의 "도입 질문 제외"에 들어가는지 (지금은 자료가 있으면 포함)', ex: [] },
+    ],
+  },
+};
+const AG = { units: {}, final: {} };
+const LIT_SHORT = (l) => ({ '통계·수학적 지식의 절차적 활용': '절차', '통계적 추론': '추론', '비판적 평가': '추론', '의사소통': '의사소통', '해당 없음': '해당 없음' }[l] || l);
+function agBookLabel(id) { const m = S.metas[id] || {}; return isCur(id) ? bookName(id) : `${pubName(m.publisher) || ''} ${m.period || ''} ${m.title || id}`.trim(); }
+async function agUnits(id) { if (!AG.units[id]) AG.units[id] = getStore(`books/${id}/units.json`).then((r) => ((r.data || {}).units) || []); return AG.units[id]; }
+async function cropUnit(bookId, u, maxW = 420) {
+  const m = S.metas[bookId]; if (!m || !m.pages || !m.pages[u.page] || !u.r) return null;
+  const src = await pageImage(bookId, m.pages[u.page].file);
+  const im = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+  const pad = 0.012, [x, y, w, h] = u.r, W = im.naturalWidth, H = im.naturalHeight;
+  const sx = Math.max(0, (x - pad) * W), sy = Math.max(0, (y - pad) * H), sw = Math.min(W - sx, (w + 2 * pad) * W), sh = Math.min(H - sy, (h + 2 * pad) * H);
+  const k = Math.min(1, (maxW * 2) / sw), c = document.createElement('canvas'); c.width = sw * k; c.height = sh * k;
+  c.getContext('2d').drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+function agCodeText(it) { if (!it) return ''; const cs = (it.codes && it.codes.length ? it.codes : [it.code]).filter(Boolean).join('+'); const ls = (it.lits && it.lits.length ? it.lits : [it.lit]).filter(Boolean).map((l) => LIT_SHORT(LIT_RENAME[l] || l)).join('+'); return `${cs} / ${ls}`; }
+function agExHtml(bookId, u, key) {
+  const fin = (AG.final[bookId] || {})[u.id];
+  const cur = isCur(bookId);
+  const head = `<b>${esc(agBookLabel(bookId))} #${u.n}</b> <span class="hint">${esc(cur ? (u.std || '') : where(bookId, u))}</span>`;
+  const state = u.kind === 'excl' ? '<span class="ag-tg bd">분석 제외</span>' : (fin ? `최종 코드: <b>${esc(agCodeText(fin))}</b>` : '');
+  const body = cur ? `<div class="ag-cur">${esc(u.orig || u.summary || '')}</div>` : `<div class="ag-img" data-crop="${key}"><span class="hint">이미지 불러오는 중…</span></div>`;
+  return `<div class="ag-ex">${body}<div class="ag-cap">${head}<br>${esc(u.summary || '')}<br>${state}${fin && fin.memo ? `<br><span class="hint">회의 메모: ${esc(fin.memo)}</span>` : ''}</div></div>`;
+}
+async function renderAgree() {
+  const B = $('#agreeBody');
+  B.innerHTML = '<p class="hint">불러오는 중…</p>';
+  const books = [...new Set([...S.cfg.books, ...Object.values(AGREE).flatMap((g) => g.rules.flatMap((r) => r.ex.map((e) => e[0])))])].filter((id) => S.metas[id]);
+  await Promise.all(books.map(async (id) => { AG.final[id] = ((await getStore(`final/${id}.json`)).data || {}).items || {}; }));
+  const crops = []; let k = 0;
+  const exOf = async (bookId, uid) => {
+    const us = await agUnits(bookId); const i = us.findIndex((x) => x.id === uid); if (i < 0) return '';
+    const u = { ...us[i], n: i + 1 }; const key = 'c' + (k++); if (!isCur(bookId)) crops.push([key, bookId, u]); return agExHtml(bookId, u, key);
+  };
+  let html = '<h2>코딩 기준과 합의</h2><p class="hint">읽기 전용 · 코딩은 바뀌지 않음</p>';
+  for (const g of Object.values(AGREE)) {
+    html += `<div class="ag-box"><h3>${esc(g.title)} <span class="ag-tg ${g.cls}">${esc(g.tag)}</span></h3><p class="hint">${esc(g.note)}</p><ol class="ag-rules">`;
+    for (const r of g.rules) html += `<li><div class="ag-rule">${esc(r.t)}</div>${(await Promise.all(r.ex.map(([b, id]) => exOf(b, id)))).join('')}</li>`;
+    html += '</ol>';
+    if (g === AGREE.group) {
+      const rows = [];
+      for (const id of books) {
+        const fin = AG.final[id]; const ids = Object.keys(fin || {}); if (!ids.length) continue;
+        const us = await agUnits(id);
+        us.forEach((u, i) => { if (fin[u.id]) rows.push([id, { ...u, n: i + 1 }, fin[u.id]]); });
+      }
+      html += `<h3>합의한 단위 (최종 코드 ${rows.length}개)</h3><details><summary>표 펼치기 · 행을 누르면 교과서 이미지</summary><table class="ag-tbl"><tr><th>목록</th><th>단위</th><th>쪽</th><th>발문 요약</th><th>코드 / 소양</th><th>회의 메모</th></tr>${rows.map(([id, u, f]) => `<tr data-row="${esc(id)}|${esc(u.id)}"><td>${esc(agBookLabel(id))}</td><td>#${u.n}</td><td>${esc(isCur(id) ? '' : where(id, u))}</td><td>${esc(u.summary || u.orig || '')}${u.kind === 'excl' ? ' <span class="ag-tg bd">지금 분석 제외</span>' : ''}</td><td><b>${esc(agCodeText(f))}</b></td><td class="hint">${esc(f.memo || '')}</td></tr>`).join('')}</table></details>`;
+    }
+    html += '</div>';
+  }
+  B.innerHTML = html;
+  for (const [key, bookId, u] of crops) {
+    const el = B.querySelector(`[data-crop="${key}"]`);
+    cropUnit(bookId, u).then((d) => { el.innerHTML = d ? `<img src="${d}" alt="">` : '<span class="hint">이미지 없음</span>'; }).catch(() => { el.innerHTML = '<span class="hint">이미지 없음</span>'; });
+  }
+  B.querySelectorAll('[data-row]').forEach((tr) => tr.onclick = async () => {
+    const nx = tr.nextElementSibling; if (nx && nx.classList.contains('ag-open')) { nx.remove(); return; }
+    const [id, uid] = tr.dataset.row.split('|'); const us = await agUnits(id); const i = us.findIndex((x) => x.id === uid);
+    const row = document.createElement('tr'); row.className = 'ag-open'; row.innerHTML = '<td colspan="6"><span class="hint">불러오는 중…</span></td>'; tr.after(row);
+    if (isCur(id)) { row.firstChild.innerHTML = `<div class="ag-cur">${esc(us[i].orig || us[i].summary || '')}</div>`; return; }
+    const d = await cropUnit(id, us[i], 600).catch(() => null); row.firstChild.innerHTML = d ? `<img src="${d}" style="max-width:600px">` : '<span class="hint">이미지 없음</span>';
+  });
 }
