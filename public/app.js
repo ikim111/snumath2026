@@ -1313,8 +1313,9 @@ async function renderOverview() {
     ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     </table></div>
-    <button id="exportOv">한눈에 보기 CSV</button>`;
+    <div class="bar"><button id="exportOvX">엑셀로 받기 (한눈에 보기 + 전체 단위)</button><button id="exportOv">한눈에 보기 CSV</button></div>`;
   $('#exportOv').onclick = () => exportOverviewCSV();
+  $('#exportOvX').onclick = () => exportOverviewXlsx();
   box.querySelectorAll('[data-grp]').forEach((tr) => tr.onclick = () => {
     const g = OV.groups[tr.dataset.grp]; if (!g) return;
     CMP.group = g; renderCompare(); $('#cmpDet').scrollIntoView({ behavior: 'smooth' });
@@ -1326,11 +1327,60 @@ async function renderOverview() {
   });
 }
 
-function exportOverviewCSV() {
-  const n3 = (v) => (isNaN(v) ? '' : v.toFixed(3));
+function ovRows(num = false) {
+  const n3 = (v) => (isNaN(v) ? '' : num ? +v.toFixed(3) : v.toFixed(3));
   const rows = [['목록', '완료', '단위 수(세 명 모두 코딩)', '세 명 코드 완전 일치율', '코드 Fleiss κ(코드별 평균)', '코드 Krippendorff α', '세 명 소양 완전 일치율', '소양 Fleiss κ(요소별 평균)', '소양 Krippendorff α', '최종 확정', '전체 단위', '비교 수준', '포함 유형']];
   (OV.rows || []).forEach((x) => rows.push([x.name.trim(), x.st2, x.st ? x.st.fl.n : '', x.st ? n3(x.st.fl.po) : '', x.st ? n3(x.st.fl.k) : '', x.st ? n3(x.st.fl.a) : '', x.st ? n3(x.st.flLit.po) : '', x.st ? n3(x.st.flLit.k) : '', x.st ? n3(x.st.flLit.a) : '', x.fin, x.tot, { fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level], CMP.kinds.map((k) => KINDS[k]).join('·')]));
-  download(`일치율_한눈에보기_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(rows));
+  return rows;
+}
+function exportOverviewCSV() { download(`일치율_한눈에보기_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(ovRows())); }
+
+// ───────── 엑셀(.xlsx) 내보내기: SheetJS를 누를 때만 불러옴 ─────────
+let XLSXP = null;
+function loadXlsx() {
+  return XLSXP ||= new Promise((ok, no) => {
+    if (window.XLSX) return ok(window.XLSX);
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = () => ok(window.XLSX);
+    sc.onerror = () => { XLSXP = null; no(new Error('엑셀 도구를 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.')); };
+    document.head.appendChild(sc);
+  });
+}
+// sheets: [[시트 이름, 행 배열]]. 열 너비는 내용 길이로
+async function saveXlsx(name, sheets) {
+  let X; try { X = await loadXlsx(); } catch (e) { toast(e.message); return; }
+  const wb = X.utils.book_new();
+  sheets.forEach(([n, rows]) => {
+    const ws = X.utils.aoa_to_sheet(rows);
+    const w = Math.max(...rows.map((r) => r.length), 1);
+    ws['!cols'] = Array.from({ length: w }, (_, i) => ({ wch: Math.min(50, Math.max(6, ...rows.slice(0, 300).map((r) => String(r[i] ?? '').length + 2))) }));
+    X.utils.book_append_sheet(wb, ws, n.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
+  });
+  X.writeFile(wb, name);
+}
+// 단위별 세 명 코딩 시트: u._book·u._no가 있으면 그 목록, 없으면 지금 목록
+function unitSheet(units, itemsOf, finOf) {
+  const coders = S.cfg.coders;
+  const head = ['구분', '시기', '출판사', '목록', '번호', '위치', '유형', '발문 요약', '내용 요소', ...coders.flatMap((c) => [`${c} 코드`, `${c} 소양`]), '코드 세 명 일치', '소양 세 명 일치', '최종 코드', '최종 소양', '메모', '단위ID'];
+  const same = (a) => (a.every(Boolean) ? (a.every((v) => v === a[0]) ? '예' : '아니오') : '');
+  return [head, ...units.map((u) => {
+    const b = u._book || S.book, m = S.metas[b] || {}, its = coders.map((c) => itemsOf(c)[u.id] || {});
+    const cs = its.map((x) => codesOf(x).slice().sort().join('+')), ls = its.map((x) => litList().filter((l) => litsOf(x).includes(l)).map(litShort).join('+'));
+    const f = finOf(u) || {};
+    return [isCur(b) ? '교육과정' : '교과서', m.period || '', isCur(b) ? '' : pubName(m.publisher), bookName(b), u._no || unitNo(u), where(b, u), KINDS[u.kind || 'main'], u.summary || u.task || '', unitCE(u).join(';'),
+      ...cs.flatMap((c, i) => [c, ls[i]]), same(cs), same(ls), codesOf(f).join('+'), litsOf(f).map(litShort).join('+'), its.map((x) => x.memo).filter(Boolean).join(' / '), u.id];
+  })];
+}
+async function exportOverviewXlsx() {
+  const units = [], itemsBy = Object.fromEntries(S.cfg.coders.map((c) => [c, {}])), fin = {};
+  S.cfg.books.forEach((id) => {
+    const o = OV.cache[id]; if (!o || !o.r.opened) return;
+    o.units.forEach((u, i) => { if (CMP.kinds.includes(u.kind || 'main')) units.push({ ...u, _book: id, _no: i + 1 }); });
+    S.cfg.coders.forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
+    Object.assign(fin, o.fin);
+  });
+  await saveXlsx(`일치율_전체_${new Date().toISOString().slice(0, 10)}.xlsx`, [['한눈에 보기', ovRows(true)], ['전체 단위 세 명 코딩', unitSheet(units, (c) => itemsBy[c], (u) => fin[u.id])]]);
 }
 
 // ───────── 비교 화면 ─────────
@@ -1418,7 +1468,7 @@ async function renderCompare() {
 
   B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>
     <p>${statusHtml}</p>
-    <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportStats">일치율 표 CSV</button></div>
+    <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
     <div class="cards">
       <div class="card"><div class="k">세 명 코드 완전 일치</div><div class="v">${pct(fl.po)}</div><div class="hint">세 명 모두 코딩한 ${fl.n}개 기준</div></div>
       <div class="card"><div class="k">Fleiss' κ (코드별 평균)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
@@ -1479,8 +1529,8 @@ async function renderCompare() {
   // 불일치 행렬
   const pairIdx = []; for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) pairIdx.push([i, j]);
   const mxLabel = (it, what) => (what === 'lit' ? litList().filter((l) => litsOf(it).includes(l)).map(litShort) : [...new Set(codesOf(it).map((c) => levelOf(c, what)))].sort()).join('+');
-  const mxData = () => {
-    const [i, j] = pairIdx[CMP.mxPair || 0] || [0, 1], what = CMP.mxWhat || 'fine';
+  const mxData = (pi = CMP.mxPair || 0, what = CMP.mxWhat || 'fine') => {
+    const [i, j] = pairIdx[pi] || [0, 1];
     const ok = (c, u) => (what === 'lit' ? litsOf(items(c)[u.id]).length : codesOf(items(c)[u.id]).length);
     const recs = units.filter((u) => ok(coders[i], u) && ok(coders[j], u)).map((u) => ({ u, a: mxLabel(items(coders[i])[u.id], what), b: mxLabel(items(coders[j])[u.id], what) }));
     const cnt = {}; recs.forEach((r) => { cnt[r.a] = (cnt[r.a] || 0) + 1; cnt[r.b] = (cnt[r.b] || 0) + 1; });
@@ -1525,6 +1575,28 @@ async function renderCompare() {
     out.push([], [`[불일치 행렬] ${coders[i]}(행) × ${coders[j]}(열) · ${{ fine: '세부 코드', stage: '단계', lit: '소양' }[CMP.mxWhat || 'fine']}`, ...labels]);
     labels.forEach((a) => out.push([a, ...labels.map((b) => recs.filter((r) => r.ra === a && r.rb === b).length)]));
     download(`${G ? G.name.replace(/\s+/g, '_') : S.book}_일치율.csv`, toCSV(out));
+  };
+  // 엑셀: 표마다 시트 하나 + 불일치 행렬(세 쌍 × 세부·단계·소양) + 단위별 세 명 코딩
+  $('#exportXlsx').onclick = () => {
+    const n3 = (v) => (isNaN(v) ? '' : +v.toFixed(3));
+    const info = [['목록', title], ['비교 수준(쌍별 표)', { fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level]], ['포함 유형', CMP.kinds.map((k) => KINDS[k]).join('·')], ['만든 날', new Date().toLocaleString('ko-KR')],
+      [], ['계산 방법'], ['완전 일치율', '고른 코드(소양) 묶음이 똑같은 단위의 비율. 두 사람(세 사람)이 모두 입력한 단위만 셈'], ['κ', '코드(요소)마다 골랐다/안 골랐다로 Cohen κ(두 명)·Fleiss κ(세 명)를 구해, 누군가 한 번이라도 고른 코드의 κ를 평균'], ['α', 'Krippendorff α(명목). 코드(요소)마다 구해 평균, 빠진 값 허용'], ['κ 해석', 'Landis & Koch(1977): 0.2 이하 낮음, 0.4 약간, 0.6 보통, 0.8 상당한 일치, 그 위 거의 완벽']];
+    const pr = [['쌍', '단위 수', '코드 완전 일치율', 'κ(코드별 평균)', '소양 단위 수', '소양 완전 일치율', '소양 κ(요소별 평균)']];
+    pairs.forEach((p) => pr.push([p.name, p.code.n, n3(p.code.po), n3(p.code.k), p.lit.n, n3(p.lit.po), n3(p.lit.k)]));
+    pr.push(['세 명 (Fleiss κ)', fl.n, n3(fl.po), n3(fl.k), flLit.n, n3(flLit.po), n3(flLit.k)], ['세 명 (Krippendorff α)', fl.n, '', n3(fl.a), flLit.n, '', n3(flLit.a)]);
+    const elHead = (t) => [t, '고른 단위 수', '세 명 단순 일치율', 'Fleiss κ', 'Krippendorff α', ...pairs.flatMap((p) => [`${p.name} 일치율`, `${p.name} Cohen κ`])];
+    const el = (k, t) => [elHead(t), ...elRows[k].map((r) => [r.cat, r.n, n3(r.po), n3(r.k), n3(r.a), ...r.pairs.flatMap((p) => [n3(p.po), n3(p.k)])])];
+    const lit = [elHead('소양 요소'), ...litList().map((e) => [litShort(e), '', n3(flLit.el[e].po), n3(flLit.el[e].k), n3(flLit.el[e].a), ...pairs.flatMap((p) => [n3(p.lit.el[e].po), n3(p.lit.el[e].k)])])];
+    const fq = [['구분', '코드·소양', ...coders.flatMap((c) => [`${c} 수`, `${c} 비율`])], ...freqRows.map((r) => [r.g, r.cat, ...r.v.flatMap((v, i) => [v, n3(v / r.base[i].length)])])];
+    const mx = [];
+    pairIdx.forEach((_, pi) => ['fine', 'stage', 'lit'].forEach((w) => {
+      const { i, j, labels, recs } = mxData(pi, w);
+      mx.push([`${coders[i]}(행) × ${coders[j]}(열) · ${{ fine: '세부 코드', stage: '단계', lit: '소양' }[w]}`, ...labels, '합계']);
+      labels.forEach((a) => mx.push([a, ...labels.map((b) => recs.filter((r) => r.ra === a && r.rb === b).length), recs.filter((r) => r.ra === a).length]));
+      mx.push(['합계', ...labels.map((b) => recs.filter((r) => r.rb === b).length), recs.length], []);
+    }));
+    const finOf = G ? (u) => (OV.cache[u._book] ? OV.cache[u._book].fin[u.id] : null) : (u) => (finalState.data.items || {})[u.id];
+    saveXlsx(`${G ? G.name.replace(/\s+/g, '_') : S.book}_일치율.xlsx`, [['정보', info], ['쌍별 일치', pr], ['단계별 일치', el('stage', '단계')], ['세부 코드별 일치', el('fine', '코드')], ['소양 요소별 일치', lit], ['코더별 사용 빈도', fq], ['불일치 행렬', mx], ['단위별 세 명 코딩', unitSheet(units, items, finOf)]]);
   };
   if (G) return;
   B.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.go); });
