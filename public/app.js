@@ -1294,7 +1294,7 @@ async function renderOverview() {
     let v = vols.find((x) => x.key === key); if (!v) vols.push(v = { key, ids: [] }); v.ids.push(id);
   });
   vols.forEach((v) => {
-    rows.push({ id: v.ids[0], name: `${v.key} 전체`, cls: 'ov-main', ...statOf(v.ids), st2: `${v.ids.filter((id) => OV.cache[id] && OV.cache[id].r.opened).length}/${v.ids.length} 단원 열림` });
+    rows.push({ id: v.ids[0], ids: v.ids, name: `${v.key} 전체`, cls: 'ov-main', ...statOf(v.ids), st2: `${v.ids.filter((id) => OV.cache[id] && OV.cache[id].r.opened).length}/${v.ids.length} 단원 열림` });
     if (v.ids.length > 1) [...v.ids].sort((a, b) => (meta(a).title || a).localeCompare(meta(b).title || b, 'ko', { numeric: true })).forEach((id) => rows.push({ id, name: '　' + ((meta(id).title || id).replace(/^중\s?\d\s*/, '')), cls: 'ov-sub', ...statOf([id]), st2: done(id) }));
   });
   // 합계 줄: 전체·교육과정·교과서, 교과서는 시기별·출판사별로도 (보고서 신뢰도 수치용)
@@ -1303,17 +1303,24 @@ async function renderOverview() {
   const tots = [['전체 합계', S.cfg.books], ['교육과정 합계', cur], ['교과서 합계', bks]];
   [...new Set(bks.map((id) => meta(id).period).filter(Boolean))].sort().forEach((p) => tots.push([`교과서 ${p}`, bks.filter((id) => meta(id).period === p)]));
   [...new Set(bks.map((id) => pubName(meta(id).publisher)).filter(Boolean))].forEach((p) => tots.push([`교과서 ${p}`, bks.filter((id) => pubName(meta(id).publisher) === p)]));
-  const totRows = tots.map(([name, ids]) => ({ name, cls: 'ov-tot', ...statOf(ids), st2: opened(ids) }));
+  const totRows = tots.map(([name, ids]) => ({ name, ids, cls: 'ov-tot', ...statOf(ids), st2: opened(ids) }));
+  OV.groups = {};
+  [...totRows, ...rows].forEach((x, i) => { if (x.ids && x.ids.length > 1) OV.groups['g' + i] = { name: x.name.trim(), ids: x.ids }; x.gk = x.ids && x.ids.length > 1 ? 'g' + i : null; });
   OV.rows = [...totRows, ...rows];
   box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>
-    <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요. 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
+    <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요(합계·'전체' 줄은 합쳐서). 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
     <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>코드 α</th><th>소양 κ (요소별 Fleiss 평균)</th><th>소양 α</th><th>최종 확정</th></tr>
-    ${totRows.map((x) => `<tr class="ov-tot"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
-    ${rows.map((x) => `<tr class="${x.cls} ${x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" data-ov="${esc(x.id)}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
+    ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
+    ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     </table></div>
     <button id="exportOv">한눈에 보기 CSV</button>`;
   $('#exportOv').onclick = () => exportOverviewCSV();
+  box.querySelectorAll('[data-grp]').forEach((tr) => tr.onclick = () => {
+    const g = OV.groups[tr.dataset.grp]; if (!g) return;
+    CMP.group = g; renderCompare(); $('#cmpDet').scrollIntoView({ behavior: 'smooth' });
+  });
   box.querySelectorAll('[data-ov]').forEach((tr) => tr.onclick = async () => {
+    CMP.group = null;
     if (tr.dataset.ov !== S.book) { await selectBook(tr.dataset.ov); fillHeaderBooks(); }
     renderCompare(); $('#cmpDet').scrollIntoView({ behavior: 'smooth' });
   });
@@ -1338,10 +1345,24 @@ async function renderCompare() {
   if (!S.book) { B.innerHTML = '<p class="hint">위 표에서 목록을 누르면 자세히 볼 수 있어요.</p>'; return; }
   B.innerHTML = '<p class="hint">불러오는 중…</p>';
   CMP.kinds ||= [...(S.cfg.defaultKinds || ['main', 'intro'])];
-  const [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`), getStore(`final/${S.book}.json`)]);
+  // 합친 보기(CMP.group): 여러 목록의 열린 단위를 모아 일치율만 봄(최종 코드 표는 목록별 화면에서)
+  const G = CMP.group;
+  let r, finRes, gUnits = null;
+  if (G) {
+    if (!G.ids.every((id) => OV.cache[id])) await renderOverview();
+    const open = G.ids.filter((id) => OV.cache[id] && OV.cache[id].r.opened);
+    r = { opened: true, status: {}, data: {} }; finRes = { data: { opened: true, items: {} } }; gUnits = [];
+    open.forEach((id) => {
+      const o = OV.cache[id];
+      o.units.forEach((u, i) => { if (CMP.kinds.includes(u.kind || 'main')) gUnits.push({ ...u, _book: id, _no: i + 1 }); });
+      S.cfg.coders.forEach((c) => { r.data[c] ||= { items: {} }; Object.assign(r.data[c].items, (o.r.data[c] && o.r.data[c].items) || {}); });
+    });
+    G.open = open.length;
+  } else [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`), getStore(`final/${S.book}.json`)]);
   finalState = { data: finRes.data || { opened: false, items: {} }, etag: finRes.etag };
   const coders = S.cfg.coders;
-  const statusHtml = coders.map((c) => `<span class="kind ${r.status[c] ? 'main' : ''}">${esc(c)} ${r.status[c] ? '완료' : '진행 중'}</span>`).join(' ');
+  const title = G ? `${G.name} (목록 ${G.open}개 합침)` : bookName(S.book);
+  const statusHtml = G ? '<span class="hint">합친 보기 · 위 표에서 다른 줄을 누르면 바뀜</span>' : coders.map((c) => `<span class="kind ${r.status[c] ? 'main' : ''}">${esc(c)} ${r.status[c] ? '완료' : '진행 중'}</span>`).join(' ');
 
   if (!r.opened) {
     B.innerHTML = `<h3 class="det-h">${esc(bookName(S.book))} 자세히</h3>
@@ -1358,7 +1379,7 @@ async function renderCompare() {
     return;
   }
 
-  const units = S.units.filter((u) => CMP.kinds.includes(u.kind || 'main'));
+  const units = gUnits || S.units.filter((u) => CMP.kinds.includes(u.kind || 'main'));
   const items = (c) => (r.data[c] && r.data[c].items) || {};
   const lv = (code) => levelOf(code, CMP.level);
   const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
@@ -1395,7 +1416,7 @@ async function renderCompare() {
   const m = S.metas[S.book];
   const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
 
-  B.innerHTML = `<h3 class="det-h">${esc(bookName(S.book))} 자세히</h3>
+  B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportStats">일치율 표 CSV</button></div>
     <div class="cards">
@@ -1431,6 +1452,7 @@ async function renderCompare() {
     <div id="mxBox"></div>
     <p class="note">행 = 앞사람, 열 = 뒷사람이 고른 묶음(여러 개면 +로 이음). 대각선(진한 칸)이 일치, 나머지가 불일치. 칸을 누르면 아래에 그 단위들이 나옵니다. 묶음이 많으면 적게 나온 것은 '기타'로 묶습니다.</p>
 
+    ${G ? '<p class="note">합친 보기에서는 단위별 최종 코드 표가 없어요. 불일치 행렬 칸을 누르면 단위가 나오고, 번호를 누르면 그 목록의 코딩 화면으로 가요.</p>' : `
     <h3>단위별 비교와 최종 코드</h3>
     <div class="bar">
       <label><input type="checkbox" id="onlyDis" ${CMP.onlyDis ? 'checked' : ''}> 불일치·미입력만 보기 (${disRows.filter((x) => x.dis).length}개)</label>
@@ -1449,11 +1471,11 @@ async function renderCompare() {
           <td class="fin">${finLits(u.id, f)}${!litsOf(f).length && majLits(its).length ? `<span class="hint">다수 ${esc(majLits(its).map(litShort).join('·'))}</span>` : ''}</td>
           <td class="l hint">${memos}</td></tr>`;
       }).join('')}
-    </table>`;
+    </table>`}`;
 
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { CMP.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderCompare(); });
   B.querySelectorAll('[name=lv]').forEach((el) => el.onchange = () => { CMP.level = el.value; renderCompare(); });
-  $('#onlyDis').onchange = (e) => { CMP.onlyDis = e.target.checked; renderCompare(); };
+  if (!G) $('#onlyDis').onchange = (e) => { CMP.onlyDis = e.target.checked; renderCompare(); };
   // 불일치 행렬
   const pairIdx = []; for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) pairIdx.push([i, j]);
   const mxLabel = (it, what) => (what === 'lit' ? litList().filter((l) => litsOf(it).includes(l)).map(litShort) : [...new Set(codesOf(it).map((c) => levelOf(c, what)))].sort()).join('+');
@@ -1479,8 +1501,8 @@ async function renderCompare() {
       const [a, b] = td.dataset.mx.split('|');
       const rs = recs.filter((r) => r.ra === a && r.rb === b);
       $('#mxList').innerHTML = `<p><b>${esc(coders[i])} ${esc(a)} / ${esc(coders[j])} ${esc(b)}</b> · ${rs.length}개</p><table class="t"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th><th>${esc(coders[i])}</th><th>${esc(coders[j])}</th></tr>
-        ${rs.map((r) => `<tr><td><a href="#" data-go="${r.u.id}">${unitNo(r.u)}</a></td><td>${esc(where(S.book, r.u))}</td><td class="l">${esc(r.u.summary || r.u.task)}</td><td>${esc(r.a)}</td><td>${esc(r.b)}</td></tr>`).join('')}</table>`;
-      $('#mxList').querySelectorAll('[data-go]').forEach((x) => x.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(x.dataset.go); });
+        ${rs.map((r) => `<tr><td><a href="#" data-go="${r.u.id}" data-gb="${r.u._book || ''}">${r.u._no || unitNo(r.u)}</a></td><td>${G ? esc(bookName(r.u._book)) + ' · ' : ''}${esc(where(r.u._book || S.book, r.u))}</td><td class="l">${esc(r.u.summary || r.u.task)}</td><td>${esc(r.a)}</td><td>${esc(r.b)}</td></tr>`).join('')}</table>`;
+      $('#mxList').querySelectorAll('[data-go]').forEach((x) => x.onclick = async (e) => { e.preventDefault(); if (x.dataset.gb && x.dataset.gb !== S.book) { CMP.group = null; await selectBook(x.dataset.gb); fillHeaderBooks(); } $('#tabs [data-tab=code]').click(); select(x.dataset.go); });
     });
   };
   $('#mxPair').onchange = (e) => { CMP.mxPair = +e.target.value; renderMx(); };
@@ -1489,7 +1511,7 @@ async function renderCompare() {
   // 일치율 표 CSV: 이 목록의 표를 한 파일에 (표마다 빈 줄로 구분)
   $('#exportStats').onclick = () => {
     const n3 = (v) => (isNaN(v) ? '' : v.toFixed(3));
-    const out = [[`${bookName(S.book)} 일치율`, `비교 수준: ${{ fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level]}`, `포함 유형: ${CMP.kinds.map((k) => KINDS[k]).join('·')}`], []];
+    const out = [[`${title} 일치율`, `비교 수준: ${{ fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level]}`, `포함 유형: ${CMP.kinds.map((k) => KINDS[k]).join('·')}`], []];
     out.push(['[쌍별·세 명]', '단위 수', '코드 완전 일치율', 'κ(코드별 평균)', '소양 완전 일치율', '소양 κ(요소별 평균)']);
     pairs.forEach((p) => out.push([p.name, p.code.n, n3(p.code.po), n3(p.code.k), n3(p.lit.po), n3(p.lit.k)]));
     out.push(['세 명 (Fleiss κ)', fl.n, n3(fl.po), n3(fl.k), n3(flLit.po), n3(flLit.k)], ['세 명 (Krippendorff α)', fl.n, '', n3(fl.a), '', n3(flLit.a)], []);
@@ -1502,8 +1524,9 @@ async function renderCompare() {
     const { i, j, labels, recs } = mxData();
     out.push([], [`[불일치 행렬] ${coders[i]}(행) × ${coders[j]}(열) · ${{ fine: '세부 코드', stage: '단계', lit: '소양' }[CMP.mxWhat || 'fine']}`, ...labels]);
     labels.forEach((a) => out.push([a, ...labels.map((b) => recs.filter((r) => r.ra === a && r.rb === b).length)]));
-    download(`${S.book}_일치율.csv`, toCSV(out));
+    download(`${G ? G.name.replace(/\s+/g, '_') : S.book}_일치율.csv`, toCSV(out));
   };
+  if (G) return;
   B.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.go); });
   finalState.data.items ||= {};
   const setFin = (id, patch) => { finalState.data.items ||= {}; finalState.data.items[id] = { ...(finalState.data.items[id] || {}), ...patch }; scheduleFinal(); };
