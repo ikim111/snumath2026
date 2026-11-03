@@ -378,3 +378,10 @@ table.ov tr.on td { background: var(--accent-soft); }
 .ag-tbl th, .ag-tbl td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
 .ag-tbl tr[data-row] { cursor: pointer; } .ag-tbl tr[data-row]:hover { background: var(--accent-soft); }
 .ag-tbl img { border: 1px solid var(--line); border-radius: 6px; }
+/* 한눈에 보기 합계 줄 */
+table.ov tr.ov-tot td { font-weight: 700; background: #efede6; }
+/* 불일치 행렬: 대각선 = 일치, 색 칸 = 불일치(누르면 단위 목록) */
+table.mx td { text-align: center; min-width: 34px; }
+table.mx td.mx-d { background: #e3efe6; font-weight: 700; }
+table.mx td.mx-x { background: #fbe9e4; cursor: pointer; }
+table.mx td.mx-x:hover { outline: 2px solid #c9634a; }
