@@ -1210,6 +1210,27 @@ function agreeStats(units, items, coders) {
   const flLit = { n: lall.length, po: lall.length ? L3.filter((row) => row.every((x) => sameSet([...x].sort(), [...row[0]].sort()))).length / lall.length : NaN, k: fks.length ? fks.reduce((a, b) => a + b, 0) / fks.length : NaN, el: el3 };
   return { pairs, fl, flLit };
 }
+// 문제해결 코드 요소별 일치: 코드(또는 단계)마다 '골랐다/안 골랐다'로 세 명 단순 일치율·Fleiss κ, 두 명씩 일치율·Cohen κ
+// level: 'fine'(세부 코드) 또는 'stage'(단계). 위 '비교 수준' 선택과 무관
+function codeElemStats(units, items, coders, level) {
+  const setOf = (it) => [...new Set(codesOf(it).map((c) => levelOf(c, level)))];
+  const has = (c, u) => codesOf(items(c)[u.id]).length > 0;
+  const order = [...new Set(codeList().map((c) => levelOf(c.code, level)))];
+  const used = new Set(units.flatMap((u) => coders.flatMap((c) => setOf(items(c)[u.id]))));
+  const cats = [...order.filter((k) => used.has(k)), ...[...used].filter((k) => !order.includes(k))];
+  const all3 = units.filter((u) => coders.every((c) => has(c, u)));
+  const S3 = all3.map((u) => coders.map((c) => setOf(items(c)[u.id])));
+  const pairIdx = [];
+  for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) pairIdx.push([i, j]);
+  return cats.map((cat) => {
+    const rows = S3.map((row) => row.map((x) => x.includes(cat)));
+    const pairs = pairIdx.map(([i, j]) => {
+      const both = units.filter((u) => has(coders[i], u) && has(coders[j], u));
+      return cohen(both.map((u) => setOf(items(coders[i])[u.id]).includes(cat)), both.map((u) => setOf(items(coders[j])[u.id]).includes(cat)));
+    });
+    return { cat, n: rows.filter((r) => r.some(Boolean)).length, po: rows.length ? rows.filter((r) => r.every((v) => v === r[0])).length / rows.length : NaN, k: fleiss(rows).k, pairs };
+  });
+}
 
 // 한눈에 보기: 모든 목록의 완료 상태와 일치율. 교과서는 한 권(같은 연도·출판사·학년) 전체 합계 + 단원별
 const OV = { cache: {}, t: 0 };
@@ -1340,6 +1361,11 @@ async function renderCompare() {
       ${pairs.map((p) => `<tr><td class="l">${esc(p.name)}</td><td>${p.code.n}</td><td>${pct(p.code.po)}</td><td>${kfmt(p.code.k)} <span class="hint">${kappaWord(p.code.k)}</span></td><td>${pct(p.lit.po)}</td><td>${kfmt(p.lit.k)} <span class="hint">${kappaWord(p.lit.k)}</span></td></tr>`).join('')}
       <tr><td class="l"><b>세 명 (Fleiss)</b></td><td>${fl.n}</td><td>${pct(fl.po)}</td><td>${kfmt(fl.k)}</td><td>${pct(flLit.po)}</td><td>${kfmt(flLit.k)}</td></tr>
     </table>
+    ${[['stage', '단계별 일치 (큰 요소)'], ['fine', '세부 코드별 일치']].map(([lvk, title]) => `<h3>통계적 문제해결: ${title}</h3>
+    <table class="t"><tr><th class="l">${lvk === 'stage' ? '단계' : '코드'}</th><th>고른 단위 수</th><th>세 명 단순 일치율</th><th>Fleiss' κ (세 명)</th>${pairs.map((p) => `<th>${esc(p.name)}<br>일치율 · Cohen κ</th>`).join('')}</tr>
+      ${codeElemStats(units, items, coders, lvk).map((r) => `<tr><td class="l">${esc(r.cat)}</td><td>${r.n}</td><td>${pct(r.po)}</td><td>${kfmt(r.k)} <span class="hint">${kappaWord(r.k)}</span></td>${r.pairs.map((p) => `<td>${pct(p.po)} · ${kfmt(p.k)}</td>`).join('')}</tr>`).join('')}
+    </table>`).join('')}
+    <p class="note">코드(단계)마다 '골랐다/안 골랐다'로 따로 셉니다. <b>고른 단위 수</b> = 세 명 모두 코딩한 단위 중 한 명이라도 그 코드를 고른 단위 수(적으면 κ가 크게 흔들림). <b>단순 일치율</b> = 그 코드를 고른 여부가 같은 단위의 비율. 단계 표는 R1·R2·R3과 단계만 고른 R을 모두 R로 묶습니다. 위 '비교 수준' 선택과 상관없이 두 표 모두 보여 줍니다.</p>
     <h3>통계적 소양: 요소별 일치</h3>
     <table class="t"><tr><th class="l">요소</th><th>세 명 단순 일치율</th><th>Fleiss' κ (세 명)</th>${pairs.map((p) => `<th>${esc(p.name)}<br>일치율 · Cohen κ</th>`).join('')}</tr>
       ${litList().map((e) => `<tr><td class="l">${litBadge(e)} ${esc(litShort(e))}</td><td>${pct(flLit.el[e].po)}</td><td>${kfmt(flLit.el[e].k)} <span class="hint">${kappaWord(flLit.el[e].k)}</span></td>${pairs.map((p) => `<td>${pct(p.lit.el[e].po)} · ${kfmt(p.lit.el[e].k)}</td>`).join('')}</tr>`).join('')}
