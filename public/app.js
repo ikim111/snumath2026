@@ -550,31 +550,48 @@ const RULE_HINTS = {
   m151a_006: "‘몇 세인지 말해 보자’ → 의사소통",
   m151b_007: '앞에 모둠 토의가 있음 → 의사소통 (6-2 #6 합의 메모)',
 };
-// 세 명이 같지만 새 규칙(10/29)으로 보면 고칠 만한 단위: 이유 목록을 돌려줌. 내가 고치면 사라짐
-function ruleOf(u) {
-  if (!S.others || !isRequired(u)) return null;
-  if (!isCur() && pubName((S.metas[S.book] || {}).publisher) !== '미래엔') return null;
-  const mine = S.mine.items[u.id];
-  const others = Object.values(S.others).map((o) => o[u.id]);
-  const all = [mine, ...others];
-  if (all.some((it) => !it || !isDone(it))) return null;
-  if ((mine.t || 0) > Math.max(...others.map((it) => it.t || 0))) return null;
-  const sig = (it) => [...codesOf(it)].sort().join('+') + '/' + [...litsOf(it)].sort().join('+');
-  if (new Set(all.map(sig)).size > 1) return null; // 다른 건 주황(disOf)에서 표시
-  const cs = codesOf(mine), ls = litsOf(mine);
-  const t = u.summary || ''; // 교육과정 원문(orig)은 나눈 다른 문장까지 들어 있어 쓰지 않음
-  const has = (l) => ls.includes(l);
-  const say = /말하|말해|이야기|토론|토의|발표/.test(t);
-  const out = RULE_HINTS[u.id] ? [RULE_HINTS[u.id]] : [];
-  if (has('의사소통') && !say && /설명|쓰시오|쓰기|글로/.test(t)) out.push('설명·쓰기는 의사소통 아님');
-  if (!has('의사소통') && say && !cs.includes('X')) out.push('말하기·토론은 의사소통');
-  if (has('통계·수학적 지식의 절차적 활용') && cs.length && cs.every((c) => /^[FP]/.test(c))) out.push('수집·계획·문제 설정엔 절차 안 붙임');
-  if (/%|백분율|퍼센트/.test(t) && cs.includes('R2') && !cs.includes('R3')) out.push('퍼센트는 R3');
-  if (cs.includes('X') && ls.some((l) => l !== LITX)) out.push('X인데 소양이 있음');
-  return out.length ? out : null;
+// 11/3 조 회의에서 사례로 정한 단위: code = 코드 묶음, lit = 소양 조건
+const AGREED_CASES = {
+  c22013: { code: 'R3' }, c09006: { code: 'R3' }, m092_097: { code: 'R3' }, m092_103: { code: 'R3' }, m151a_052: { code: 'R3' },
+  c22016: { lit: '절차' }, c15007: { lit: '절차' }, m151a_004: { lit: '절차' }, d151b_012: { lit: '절차' }, c22015: { lit: '추론' },
+  c22009: { lit: '절차' }, c22012: { lit: '절차' }, c09016: { lit: '추론' }, m092_077: { lit: '추론' },
+  m153a_025: { code: 'R2+R3' }, m153b_029: { code: 'R2+R3' }, d153b_015: { code: 'R2+R3' }, m225_016: { code: 'I1+R3' }, d221e_011: { code: 'I1+R3' },
+  m221_008: { lit: '의사소통' }, m222_000: { lit: '의사소통' }, d151d_000: { lit: '의사소통' },
+};
+const LIT_P = '통계·수학적 지식의 절차적 활용', LIT_R = '통계적 추론', LIT_C = '의사소통';
+// 한 사람의 코딩이 조 합의(10/27·11/3)와 다른 점: 이유 목록. 고치면 사라짐
+function agreeIssues(u, it) {
+  if (!u || !it || !isDone(it)) return [];
+  const cs = codesOf(it), ls = litsOf(it), has = (l) => ls.includes(l), t = u.summary || ''; // 교육과정 원문(orig)은 나눈 다른 문장까지 들어 있어 쓰지 않음
+  const out = [], c = AGREED_CASES[u.id];
+  if (c && c.code && [...cs].sort().join('+') !== c.code) out.push(`사례 합의(11/3): 코드 ${c.code}`);
+  if (c && c.lit === '절차' && (!has(LIT_P) || has(LIT_R) || has(LITX))) out.push('사례 합의(11/3): 소양 절차');
+  if (c && c.lit === '추론' && (!has(LIT_R) || has(LIT_P))) out.push('사례 합의(11/3): 소양 추론');
+  if (c && c.lit === '의사소통' && !has(LIT_C)) out.push('사례 합의(11/3): 의사소통');
+  const say = RULE_HINTS[u.id] || /말하|말해|이야기|토론|토의|발표/.test(t);
+  if (!has(LIT_C) && say && !cs.includes('X')) out.push("'말하시오'·토론은 의사소통(10/27·11/3)");
+  if (has(LIT_C) && !say && /설명|쓰시오|쓰기|글로/.test(t)) out.push("'설명하시오'·'쓰시오'는 의사소통 아님(10/27)");
+  if (cs.length && cs.every((x) => /^[FP]/.test(x)) && ls.length === 1 && ls[0] === LITX) out.push('F·P 단위도 소양은 절차, 판단이 들어가면 추론(11/3)');
+  if (/%|백분율|퍼센트/.test(t) && cs.includes('R2') && !cs.includes('R3')) out.push('퍼센트 구하기는 R3(10/27)');
+  if (/필요성|유용성/.test(t) && /인식/.test(t) && (!cs.includes('X') || !(ls.length === 1 && ls[0] === LITX))) out.push('유용성·필요성 인식은 X / 해당 없음(10/27)');
+  return [...new Set(out)];
 }
-const ruleTag = (u) => { const r = ruleOf(u); return r ? `<span class="ruletag" title="${esc(r.join(' / '))}">규칙 확인</span>` : ''; };
-const disTag = (u) => { const d = disOf(u); return d ? `<span class="distag">${d.join('·')} 다름</span>` : ''; };
+// 내 코딩이 합의와 다른 점 (코딩 화면용)
+function ruleOf(u) { if (!u || !isRequired(u)) return null; const r = agreeIssues(u, S.mine.items[u.id]); return r.length ? r : null; }
+// 세 명이 모두 다르게 고른 부분('코드'·'소양'). 비교가 열린 목록만
+function all3Of(u) {
+  if (!S.others || !u || !isRequired(u)) return null;
+  const all = [S.mine.items[u.id], ...Object.values(S.others).map((o) => o[u.id])];
+  if (all.length < 3 || all.some((it) => !it || !isDone(it))) return null;
+  const cs = new Set(all.map((it) => [...codesOf(it)].sort().join('+'))), ls = new Set(all.map((it) => [...litsOf(it)].sort().join('+')));
+  const parts = [cs.size === all.length ? '코드' : '', ls.size === all.length ? '소양' : ''].filter(Boolean);
+  return parts.length ? parts : null;
+}
+// 칠하기 우선순위: 주황(합의와 다름) > 노랑(세 명 모두 다름) > 회색(두 명만 같음)
+const markCls = (u) => (ruleOf(u) ? 'rule' : all3Of(u) ? 'all3' : isDis(u) ? 'dis' : '');
+const ruleTag = (u) => { const r = ruleOf(u); return r ? `<span class="ruletag" title="${esc(r.join(' / '))}">합의와 다름</span>` : ''; };
+const all3Tag = (u) => { const d = all3Of(u); return d ? `<span class="all3tag">세 명 모두 다름(${d.join('·')})</span>` : ''; };
+const disTag = (u) => { const d = disOf(u); return d && !all3Of(u) ? `<span class="distag">${d.join('·')} 다름</span>` : ''; };
 
 function sortUnits() {
   if (isCur()) return;
@@ -603,7 +620,7 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${disTag(u)}${ruleTag(u)}${markHtml(it)}</span></div>`;
+      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${markCls(u)}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${ruleTag(u)}${all3Tag(u)}${disTag(u)}${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -665,7 +682,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''].join(' ');
+    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', markCls(u)].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -805,7 +822,7 @@ function renderPanel() {
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
     ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
     <div class="${S.mine.done ? 'locked' : ''}">
-    ${ruleWhy ? `<div class="rulebox">세 명 같지만 새 규칙으로 확인: ${esc(ruleWhy.join(' · '))}</div>` : ''}
+    ${ruleWhy ? `<div class="rulebox">조 합의와 다름: ${esc(ruleWhy.join(' · '))}</div>` : ''}${all3Of(u) ? `<div class="all3box">세 명이 모두 다르게 고름(${esc(all3Of(u).join('·'))}) · 회의에서 정할 단위</div>` : ''}
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${(disOf(u) || []).includes('코드') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : (c.code !== 'X' && codesOf(it).includes('X') ? 'xoff' : '')}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${c.code === 'X' && codesOf(it).includes('X') ? '✕ ' : ''}${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
@@ -881,14 +898,14 @@ function renderList() {
   const req = S.units.filter(isRequired);
   const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
   if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
-  const dis = S.others ? req.filter(isDis).length : 0, rul = S.others ? req.filter((u) => ruleOf(u)).length : 0;
-  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length}${S.others ? ` · 세 명 다름 ${dis} · 규칙 확인 ${rul}` : ''}` : '';
+  const dis = S.others ? req.filter(isDis).length : 0, a3 = S.others ? req.filter((u) => all3Of(u)).length : 0, rul = req.filter((u) => ruleOf(u)).length;
+  $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length} · 합의와 다름 ${rul}${S.others ? ` · 세 명 모두 다름 ${a3} · 다름 ${dis}` : ''}` : '';
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
-    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${isDis(u) ? 'dis' : ruleOf(u) ? 'rule' : ''}" data-id="${u.id}">
+    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${markCls(u)}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
-      <span class="c">${disTag(u)}${ruleTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
+      <span class="c">${ruleTag(u)}${all3Tag(u)}${disTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
   $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -1458,9 +1475,11 @@ async function renderCompare() {
     const sets = its.map(lvSet);
     const ls = its.map((x) => [...litsOf(x)].sort());
     const dis = sets.some((x) => !x.length) || !sets.every((x) => sameSet(x, sets[0])) || ls.some((x) => !x.length) || !ls.every((x) => sameSet(x, ls[0]));
-    return { u, its, dis };
+    const a3 = its.every((x) => isDone(x)) && (new Set(sets.map((x) => x.join('+'))).size === coders.length || new Set(ls.map((x) => x.join('+'))).size === coders.length);
+    const agr = coders.map((c, i) => [c, agreeIssues(u, its[i])]).filter((x) => x[1].length);
+    return { u, its, dis, a3, agr };
   });
-  const shown = CMP.onlyDis ? disRows.filter((x) => x.dis) : disRows;
+  const shown = CMP.onlyDis ? disRows.filter((x) => x.dis || x.agr.length) : disRows;
   const fin = finalState.data.items || {};
   const finLits = (id, f) => `<div class="fin-codes">${litList().map((l) => `<button data-fl="${esc(l)}" data-fid="${id}" class="${litsOf(f).includes(l) ? 'on' : ''}">${litBadge(l)} ${esc(litShort(l))}</button>`).join('')}</div>`;
   const finChips = (id, f) => `<div class="fin-codes">${codeList().map((c) => `<button data-fc="${esc(c.code)}" data-fid="${id}" class="${codesOf(f).includes(c.code) ? 'on' : ''}" style="${codesOf(f).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}">${esc(c.code)}</button>`).join('')}</div>`;
@@ -1506,18 +1525,18 @@ async function renderCompare() {
     ${G ? '<p class="note">합친 보기에서는 단위별 최종 코드 표가 없어요. 불일치 행렬 칸을 누르면 단위가 나오고, 번호를 누르면 그 목록의 코딩 화면으로 가요.</p>' : `
     <h3>단위별 비교와 최종 코드</h3>
     <div class="bar">
-      <label><input type="checkbox" id="onlyDis" ${CMP.onlyDis ? 'checked' : ''}> 불일치·미입력만 보기 (${disRows.filter((x) => x.dis).length}개)</label>
+      <label><input type="checkbox" id="onlyDis" ${CMP.onlyDis ? 'checked' : ''}> 불일치·미입력·합의와 다름만 보기 (${disRows.filter((x) => x.dis || x.agr.length).length}개)</label>
       <button id="fillMaj">다수결로 빈 최종 코드 채우기 (두 명 이상 고른 코드)</button>
       <button id="exportFinal">최종 코드 CSV</button>
       <button id="exportAll">세 명 코딩 CSV</button>
     </div>
     <table class="t" id="cmpTable"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th>최종 코드</th><th>최종 소양</th><th class="l">메모</th></tr>
-      ${shown.map(({ u, its, dis }) => {
+      ${shown.map(({ u, its, dis, a3, agr }) => {
         const f = fin[u.id] || {};
         const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
         const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${litBadges(it)}</td>`).join('');
         const mj = majCodes(its);
-        return `<tr class="${dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${esc(u.summary || u.task)}</td>${cc}
+        return `<tr class="${agr.length ? 'agr' : a3 ? 'all3' : dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${agr.length ? `<span class="ruletag" title="${esc(agr.map(([c, r]) => `${c}: ${r.join(', ')}`).join(' / '))}">합의와 다름 · ${esc(agr.map((x) => x[0]).join('·'))}</span>` : ''}${a3 ? '<span class="all3tag">세 명 모두 다름</span>' : ''}${esc(u.summary || u.task)}</td>${cc}
           <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>
           <td class="fin">${finLits(u.id, f)}${!litsOf(f).length && majLits(its).length ? `<span class="hint">다수 ${esc(majLits(its).map(litShort).join('·'))}</span>` : ''}</td>
           <td class="l hint">${memos}</td></tr>`;
@@ -2045,11 +2064,22 @@ const AGREE = {
       { t: "소양 '비판적 평가' → '통계적 추론(reasoning)'으로 이름 변경 (회의 땐 검토 중, 10/28 사이트 반영)", ex: [['M09-2', 'm092_061']] },
     ],
   },
+  nov3: {
+    title: '② 11/3 조 회의 합의', tag: '11/3 회의', cls: 'ok',
+    note: '11/3 조 회의에서 실제 사례를 보고 정한 내용. 안건 3(교육과정 "뜻을 안다")은 이번에 정하지 않음.',
+    rules: [
+      { t: '상대도수 그래프·분포에서 값을 읽어 도수(개수)를 구하는 발문, 두 집단의 분포를 비교하는 상황에서 상대도수를 다루는 진술은 R3 (사례로 합의, 일반 규칙은 미정)', ex: [['C2022', 'c22013'], ['M09-2', 'm092_097'], ['M15-1a', 'm151a_052']] },
+      { t: '자료 수집(P) 단위도 소양은 절차적 활용. 배운 대로를 넘어 학생의 판단이 들어가면 통계적 추론 (예: 2022 "통계적 탐구 문제를 설정한다" = 추론)', ex: [['C2022', 'c22016'], ['C2022', 'c22015'], ['D15-1b', 'd151b_012']] },
+      { t: '소양: 앞에서 배운 방법을 그대로 쓰면 절차, 이유·근거를 설명하거나 주장을 평가하거나 안 배운 상황을 스스로 해석하면 추론. 교육과정 "해석할 수 있다" = 절차, "분포의 특성을 설명할 수 있게 한다" = 추론', ex: [['C2022', 'c22009'], ['C2009', 'c09016'], ['M09-2', 'm092_077']] },
+      { t: '발문에 드러난 활동을 모두 코딩: 구하고 비교 = R2+R3, 비교해 판단 = R3+I1', ex: [['M15-3a', 'm153a_025'], ['M22-5', 'm225_016'], ['D22-1e', 'd221e_011']] },
+      { t: "'말하시오' = 의사소통 (10/27 합의 재확인)", ex: [['M22-1', 'm221_008'], ['D15-1d', 'd151d_000']] },
+    ],
+  },
   mine: {
-    title: '② 형준 기준', tag: '조원 확인 전', cls: 'wa',
+    title: '③ 형준 기준', tag: '조원 확인 전', cls: 'wa',
     note: '김형준이 전체 코딩을 점검하며 정한 기준(10/29~11/1). 조원과 아직 합의하지 않음.',
     rules: [
-      { t: '절차 = 교과서에서 이미 가르친 방법을 그대로 적용 / 추론 = 이유·근거 설명, 남의 주장 평가, 아직 안 배운 상황에서 스스로 해석', ex: [['M22-3', 'm223_026']] },
+      { t: '(11/3 조 합의로 채택) 절차 = 교과서에서 이미 가르친 방법을 그대로 적용 / 추론 = 이유·근거 설명, 남의 주장 평가, 아직 안 배운 상황에서 스스로 해석', ex: [['M22-3', 'm223_026']] },
       { t: "같은 발문도 앞에서 가르쳤는지로 판단. 생각열기도 이전 학년 방법으로 풀리면 절차, 새 방법을 스스로 만들어야 하면 추론", ex: [['M22-4', 'm224_004'], ['D22-1f', 'd221f_000']] },
       { t: '한 단위에 해당하는 소양을 모두 체크 (중복 코딩)', ex: [['M09-1', 'm091_012']] },
       { t: "'~다고 할 수 있는지' 맥락 속 결론 = R3+I1", ex: [['D22-1e', 'd221e_011']] },
@@ -2099,8 +2129,9 @@ function renderCodebook() {
   };
   const lits = litList().map((l) => `<tr><td><b>${esc(litShort(l))}</b>${l !== litShort(l) ? `<div class="hint">${esc(l)}</div>` : ''}</td><td>${esc(LIT_DESC[l] || '')}</td><td class="hint">${esc(LIT_SRC[l] || '')}</td></tr>`).join('');
   const ag = (AGREE.group.rules || []).map((r) => `<li>${esc(r.t)}</li>`).join('');
+  const ag3 = (AGREE.nov3.rules || []).map((r) => `<li>${esc(r.t)}</li>`).join('');
   B.innerHTML = `<h2>코드북</h2>
-  <p class="hint">선행연구와 조 합의(10/20 코딩 규칙 · 10/27 회의 · 11/2 제외 기준)만 담았습니다. 조원 확인 전 기준과 아직 정하지 않은 경계는 넣지 않았습니다. 읽기 전용이며 코딩은 바뀌지 않습니다. 교과서 예시는 '합의' 탭에서 볼 수 있습니다.</p>
+  <p class="hint">선행연구와 조 합의(10/20 코딩 규칙 · 10/27 회의 · 11/2 제외 기준 · 11/3 회의)만 담았습니다. 조원 확인 전 기준과 아직 정하지 않은 경계는 넣지 않았습니다. 읽기 전용이며 코딩은 바뀌지 않습니다. 교과서 예시는 '합의' 탭에서 볼 수 있습니다.</p>
 
   <div class="ag-box"><h3>1. 분석틀과 근거</h3>
     <ul class="cb-list">
@@ -2127,7 +2158,10 @@ function renderCodebook() {
     <div class="ov-wrap"><table class="t cb-t"><tr><th class="l">요소</th><th class="l">뜻</th><th class="l">근거</th></tr>${lits}</table></div></div>
 
   <div class="ag-box"><h3>5. 판정 규칙 <span class="ag-tg ok">조 합의 · 10/27</span></h3>
-    <ol class="cb-list">${ag}</ol></div>
+    <ol class="cb-list">${ag}</ol>
+    <h3>11/3 조 회의 <span class="ag-tg ok">조 합의 · 11/3</span></h3>
+    <ol class="cb-list">${ag3}</ol>
+    <p class="hint">코딩 화면과 비교 화면에서 이 합의와 다른 코딩은 주황, 세 명이 모두 다른 단위는 노랑으로 칠합니다.</p></div>
 
   <div class="ag-box"><h3>6. 신뢰도</h3>
     <ul class="cb-list">
