@@ -482,6 +482,7 @@ function bindTabs() {
     if (t === 'stats') renderStats();
     if (t === 'settings') renderSettings();
     if (t === 'agree') renderAgree();
+    if (t === 'codebook') renderCodebook();
     if (t === 'code') renderAll();
   };
 }
@@ -2083,6 +2084,71 @@ function agExHtml(bookId, u, key) {
   const body = cur ? `<div class="ag-cur">${esc(u.orig || u.summary || '')}</div>` : `<div class="ag-img" data-crop="${key}"><span class="hint">이미지 불러오는 중…</span></div>`;
   return `<div class="ag-ex">${body}<div class="ag-cap">${head}<br>${esc(u.summary || '')}<br>${state}${fin && fin.memo ? `<br><span class="hint">회의 메모: ${esc(fin.memo)}</span>` : ''}</div></div>`;
 }
+// ───────── 코드북 탭: 선행연구와 조 합의(10/20 코딩 규칙, 10/27 회의, 11/2 제외 기준)만 담음 (읽기 전용) ─────────
+// 조원 확인 전 기준과 아직 정하지 않은 경계는 넣지 않음. 코드 정의는 지금 분석틀 설정에서 바로 불러옴
+function renderCodebook() {
+  const B = $('#codebookBody');
+  const stageOf = (c) => (c.stage || '')[0];
+  const rows = fw().map((c) => `<tr class="cb-${stageOf(c)}"><td class="cb-code">${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.desc || '')}${c.def ? `<div class="hint">원 정의: ${esc(c.def)}</div>` : ''}</td><td>${esc(JK_TIPS[c.code] || '')}</td></tr>`).join('');
+  const stageOnly = ['F', 'P', 'R', 'I'].map((k) => `<tr class="cb-${k}"><td class="cb-code">${k}</td><td>단계만</td><td colspan="2">${esc(JK_TIPS[k] || '')}</td></tr>`).join('');
+  const LIT_SRC = {
+    '통계·수학적 지식의 절차적 활용': "이지연·임해미(2021, pp. 198–199) 요소 C '수학적·통계적 지식'. Gal(2002, p. 4)의 지식 요소(통계적·수학적 지식). Ben-Zvi & Garfield(2004, p. 7)의 통계적 소양(기본 기능, 개념·어휘·기호 이해)",
+    '통계적 추론': "이지연·임해미(2021, pp. 198–199) 요소 E '비판적 태도'(아이디어에 문제를 제기하거나 평가, 오류 판단). Gal(2002, pp. 2–3) '해석하고 비판적으로 평가'. 이름은 Ben-Zvi & Garfield(2004, p. 7)·delMas(2002)의 통계적 추론(자료·표현·요약에 근거한 해석, 결과가 왜·어떻게 나왔는지 설명)에 따라 바꿈",
+    '의사소통': "이지연·임해미(2021, pp. 198–199) 요소 F '의사소통'(다른 사람과 의사소통하며 다양한 관점을 존중하고 토론). Gal(2002, pp. 2–3) '논하고 의사소통하는 능력'",
+    '해당 없음': '세 요소 모두 해당하지 않을 때',
+  };
+  const lits = litList().map((l) => `<tr><td><b>${esc(litShort(l))}</b>${l !== litShort(l) ? `<div class="hint">${esc(l)}</div>` : ''}</td><td>${esc(LIT_DESC[l] || '')}</td><td class="hint">${esc(LIT_SRC[l] || '')}</td></tr>`).join('');
+  const ag = (AGREE.group.rules || []).map((r) => `<li>${esc(r.t)}</li>`).join('');
+  B.innerHTML = `<h2>코드북</h2>
+  <p class="hint">선행연구와 조 합의(10/20 코딩 규칙 · 10/27 회의 · 11/2 제외 기준)만 담았습니다. 조원 확인 전 기준과 아직 정하지 않은 경계는 넣지 않았습니다. 읽기 전용이며 코딩은 바뀌지 않습니다. 교과서 예시는 '합의' 탭에서 볼 수 있습니다.</p>
+
+  <div class="ag-box"><h3>1. 분석틀과 근거</h3>
+    <ul class="cb-list">
+      <li><b>통계적 문제해결 과정</b>: 전혜원·김래영(2019, pp. 432–433, 표 Ⅲ-1)의 4단계(문제 설정·자료 계획 및 수집·자료 표현 및 분석·결과 해석)와 9개 코드. 4단계는 Franklin et al.(2007, p. 11, GAISE)의 통계적 문제해결 과정을 따르고, 코드는 배혜진·이동환(2016)의 분석 기준에서 출발함. '해당 없음(X)'은 조에서 추가</li>
+      <li><b>통계적 소양</b>: Gal(2002, pp. 2–3)의 정의(통계 정보를 해석하고 비판적으로 평가하는 능력 + 그에 대해 논하고 의사소통하는 능력)를 바탕으로, 이지연·임해미(2021, pp. 198–199)의 6요소 가운데 단계와 짝이 맞는 세 요소(수학적·통계적 지식, 비판적 태도, 의사소통)를 씀</li>
+      <li><b>분석틀 구성의 선례</b>: 이지연·임해미(2021)는 통계적 문제해결 단계 × 통계적 소양 요소로 교과서 과제를 분석함(p. 200)</li>
+    </ul></div>
+
+  <div class="ag-box"><h3>2. 분석 대상과 단위 <span class="ag-tg ok">조 합의</span></h3>
+    <ul class="cb-list">
+      <li><b>내용</b>: 세 시기 공통 내용인 줄기와 잎 그림, 도수분포표(상대도수 포함), 히스토그램, 도수분포다각형, 대푯값</li>
+      <li><b>자료</b>: 2009·2015·2022 개정 교육과정의 성취기준, 성취기준 해설, 교수·학습 유의사항 / 교과서 미래엔·비상·동아, 시기별 출판사당 1권(2009·2015는 중3 대푯값 단원 포함)</li>
+      <li><b>단위</b>: 교육과정은 학생 행동(동사) 하나, 교과서는 발문(소문항) 하나. 개념 서술은 제외</li>
+      <li><b>제외</b>: 교과서 [보기] 상자와 대단원 도입 질문은 분석에서 제외, 소단원 '생각열기'는 포함. 예외로 동아 2015 중1 8.1의 #8·#9는 포함(11/2)</li>
+      <li><b>교육과정</b>: 하위 활동이 적혀 있지 않은 동사(예: "분석하고")는 단계(F·P·R·I)까지만 코딩</li>
+    </ul></div>
+
+  <div class="ag-box"><h3>3. 통계적 문제해결 코드</h3>
+    <p class="hint">뜻 = 사이트 설명 · 원 정의 = 전혜원·김래영(2019) · 경계 규칙 = 조 코딩 규칙(10/20)</p>
+    <div class="ov-wrap"><table class="t cb-t"><tr><th>코드</th><th class="l">이름</th><th class="l">뜻</th><th class="l">경계 규칙</th></tr>${rows}${stageOnly}</table></div></div>
+
+  <div class="ag-box"><h3>4. 통계적 소양</h3>
+    <p class="hint">'해당 없음'은 다른 요소와 함께 고를 수 없음. 소양은 문제해결 단계와 따로 판단</p>
+    <div class="ov-wrap"><table class="t cb-t"><tr><th class="l">요소</th><th class="l">뜻</th><th class="l">근거</th></tr>${lits}</table></div></div>
+
+  <div class="ag-box"><h3>5. 판정 규칙 <span class="ag-tg ok">조 합의 · 10/27</span></h3>
+    <ol class="cb-list">${ag}</ol></div>
+
+  <div class="ag-box"><h3>6. 신뢰도</h3>
+    <ul class="cb-list">
+      <li>세 명이 독립적으로 코딩한 뒤 비교·일치율 탭에서 일치도를 계산하고, 불일치는 조 회의에서 합의해 최종 코드로 정함</li>
+      <li>코드·소양을 여러 개 고를 수 있어, 코드(요소)마다 '골랐다/안 골랐다'로 Cohen κ(두 명)·Fleiss κ(세 명)·Krippendorff α를 구해 평균함</li>
+      <li>κ 해석: Landis & Koch(1977) — 0.2 이하 낮음, 0.4 약간, 0.6 보통, 0.8 상당한 일치, 그 위 거의 완벽</li>
+    </ul></div>
+
+  <div class="ag-box"><h3>참고문헌</h3>
+    <ul class="cb-list hint">
+      <li>배혜진, 이동환 (2016). 통계적 문제해결 과정 관점에 따른 초등 수학교과서 통계 지도 방식 분석.</li>
+      <li>이지연, 임해미 (2021). 통계적 문제해결과정 및 통계적 소양에 관한 &lt;확률과 통계&gt; 교과서 분석. 한국학교수학회논문집, 24(2), 191–216.</li>
+      <li>전혜원, 김래영 (2019). 한국과 미국 중학교 수학 교과서의 통계적 문제해결과정 비교연구. 수학교육 논문집, 33(4), 425–444.</li>
+      <li>Ben-Zvi, D., & Garfield, J. (2004). Statistical literacy, reasoning, and thinking: Goals, definitions, and challenges. In D. Ben-Zvi & J. Garfield (Eds.), The challenge of developing statistical literacy, reasoning and thinking (pp. 3–15). Kluwer.</li>
+      <li>delMas, R. C. (2002). Statistical literacy, reasoning, and learning: A commentary. Journal of Statistics Education, 10(3).</li>
+      <li>Franklin, C., et al. (2007). Guidelines for assessment and instruction in statistics education (GAISE) report: A pre-K–12 curriculum framework. American Statistical Association.</li>
+      <li>Gal, I. (2002). Adults' statistical literacy: Meanings, components, responsibilities. International Statistical Review, 70(1), 1–25.</li>
+      <li>Landis, J. R., & Koch, G. G. (1977). The measurement of observer agreement for categorical data. Biometrics, 33(1), 159–174.</li>
+    </ul></div>`;
+}
+
 async function renderAgree() {
   const B = $('#agreeBody');
   B.innerHTML = '<p class="hint">불러오는 중…</p>';

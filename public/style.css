@@ -385,3 +385,10 @@ table.mx td { text-align: center; min-width: 34px; }
 table.mx td.mx-d { background: #e3efe6; font-weight: 700; }
 table.mx td.mx-x { background: #fbe9e4; cursor: pointer; }
 table.mx td.mx-x:hover { outline: 2px solid #c9634a; }
+/* 코드북 탭: 단계 색 띠 */
+table.cb-t td { vertical-align: top; text-align: left; }
+table.cb-t td.cb-code { font-weight: 700; white-space: nowrap; border-left: 4px solid var(--line); }
+table.cb-t tr.cb-F td.cb-code { border-left-color: var(--P); } table.cb-t tr.cb-P td.cb-code { border-left-color: var(--C); }
+table.cb-t tr.cb-R td.cb-code { border-left-color: var(--A); } table.cb-t tr.cb-I td.cb-code { border-left-color: var(--I); }
+table.cb-t tr.cb-X td.cb-code { border-left-color: var(--X); }
+.cb-list > li { margin: 6px 0; }
