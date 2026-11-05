@@ -404,3 +404,15 @@ table.cb-t tr.cb-F td.cb-code { border-left-color: var(--P); } table.cb-t tr.cb-
 table.cb-t tr.cb-R td.cb-code { border-left-color: var(--A); } table.cb-t tr.cb-I td.cb-code { border-left-color: var(--I); }
 table.cb-t tr.cb-X td.cb-code { border-left-color: var(--X); }
 .cb-list > li { margin: 6px 0; }
+
+/* 4×3 칸 (11/6) */
+.cell-src { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.cell-src.src-추정, .cell-src.src-다시 { color: #b5651d; font-weight: 600; }
+.cell-src button { font-size: 11px; padding: 2px 6px; margin-left: 4px; }
+.cell-grid { border-collapse: collapse; width: 100%; font-size: 12px; margin-bottom: 8px; }
+.cell-grid th { font-weight: 600; padding: 3px; text-align: center; color: var(--muted); }
+.cell-grid td { padding: 3px; text-align: center; }
+.cell-grid td.off { color: #ccc; }
+.cell-grid button { width: 100%; padding: 6px 0; font-weight: 700; }
+.cell-grid button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.cell-grid button.auto { border: 2px dashed var(--ink); }
