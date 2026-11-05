@@ -559,7 +559,7 @@ const AGREED_CASES = {
   m221_008: { lit: '의사소통' }, m222_000: { lit: '의사소통' }, d151d_000: { lit: '의사소통' },
 };
 const LIT_P = '통계·수학적 지식의 절차적 활용', LIT_R = '통계적 추론', LIT_C = '의사소통';
-// 한 사람의 코딩이 조 합의(10/27·11/3)와 다른 점: 이유 목록. 고치면 사라짐
+// 한 사람의 코딩이 조 합의와 다른 점: 이유 목록. 고치면 사라짐. 기준은 2차 합의(11/3) — 10/27에만 있던 규칙(설명하시오≠의사소통, 퍼센트=R3, 유용성=X)은 칠하지 않음
 function agreeIssues(u, it) {
   if (!u || !it || !isDone(it)) return [];
   const cs = codesOf(it), ls = litsOf(it), has = (l) => ls.includes(l), t = u.summary || ''; // 교육과정 원문(orig)은 나눈 다른 문장까지 들어 있어 쓰지 않음
@@ -569,11 +569,8 @@ function agreeIssues(u, it) {
   if (c && c.lit === '추론' && (!has(LIT_R) || has(LIT_P))) out.push('사례 합의(11/3): 소양 추론');
   if (c && c.lit === '의사소통' && !has(LIT_C)) out.push('사례 합의(11/3): 의사소통');
   const say = RULE_HINTS[u.id] || /말하|말해|이야기|토론|토의|발표/.test(t);
-  if (!has(LIT_C) && say && !cs.includes('X')) out.push("'말하시오'·토론은 의사소통(10/27·11/3)");
-  if (has(LIT_C) && !say && /설명|쓰시오|쓰기|글로/.test(t)) out.push("'설명하시오'·'쓰시오'는 의사소통 아님(10/27)");
-  if (cs.length && cs.every((x) => /^[FP]/.test(x)) && ls.length === 1 && ls[0] === LITX) out.push('F·P 단위도 소양은 절차, 판단이 들어가면 추론(11/3)');
-  if (/%|백분율|퍼센트/.test(t) && cs.includes('R2') && !cs.includes('R3')) out.push('퍼센트 구하기는 R3(10/27)');
-  if (/필요성|유용성/.test(t) && /인식/.test(t) && (!cs.includes('X') || !(ls.length === 1 && ls[0] === LITX))) out.push('유용성·필요성 인식은 X / 해당 없음(10/27)');
+  if (!has(LIT_C) && say && !cs.includes('X')) out.push("'말하시오'(말하고·토론 포함)는 의사소통(11/3)");
+  if (cs.length && cs.every((x) => /^[FP]/.test(x)) && !has(LIT_P) && !has(LIT_R)) out.push('F·P 단위도 소양은 절차, 판단이 들어가면 추론(11/3)');
   return [...new Set(out)];
 }
 // 내 코딩이 합의와 다른 점 (코딩 화면용)
