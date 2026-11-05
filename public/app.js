@@ -91,7 +91,7 @@ const JK_TIPS = {
 };
 const LIT_DESC = {
   '통계·수학적 지식의 절차적 활용': '통계 지식 적용(통계적 문제 판단·수집 방법·표현·계산·용어·의미)',
-  '통계적 추론': '통계적 추론(reasoning): 자료·표현·주장을 근거로 따지고 판단하기',
+  '비판적 태도': '비판적 태도: 자료·표현·주장을 근거로 따지고 판단하기 (11/5 이름만 바꿈, 판정 기준은 예전 \'통계적 추론\'과 같음)',
   '의사소통': '설명·발표·토론이 활동의 중심일 때',
   '해당 없음': '세 요소 모두 해당하지 않음',
 };
@@ -112,7 +112,7 @@ const DEFAULT_CFG = () => ({
   positions: ['도입', '문제', '활동', '넓히기', '연습', '탐구', '평가', '기타'],
   stdList: ['9수04-01', '9수04-02', '9수04-03', '9수04-04', '9수04-07', '9수04-08', '9수04-09', '기타'],
   defaultKinds: ['main', 'intro', 'example'],
-  litList: ['통계·수학적 지식의 절차적 활용', '통계적 추론', '의사소통', '해당 없음'],
+  litList: ['통계·수학적 지식의 절차적 활용', '비판적 태도', '의사소통', '해당 없음'],
   books: [],
   v2: true, v3: true, v4: true, v5: true,
 });
@@ -256,8 +256,8 @@ const stageColor = (code) => {
   const order = [...new Set(fw().map((c) => c.stage))].filter((x) => x[0] !== 'X');
   return ['var(--P)', 'var(--C)', 'var(--A)', 'var(--I)', 'var(--X)'][order.indexOf(st)] || 'var(--X)';
 };
-// 소양 이름 바뀜(10/28): '비판적 평가' → '통계적 추론'. 옛 이름으로 저장된 기록도 새 이름으로 읽음
-const LIT_RENAME = { '비판적 평가': '통계적 추론' };
+// 소양 이름 바뀜: '비판적 평가' → '통계적 추론'(10/28) → '비판적 태도'(11/5 조 회의, 이름만). 옛 이름으로 저장된 기록도 새 이름으로 읽음
+const LIT_RENAME = { '비판적 평가': '비판적 태도', '통계적 추론': '비판적 태도' };
 const litList = () => (S.cfg.litList || DEFAULT_CFG().litList).map((l) => LIT_RENAME[l] || l);
 const isCur = (id = S.book) => (S.metas[id] || {}).type === 'curriculum';
 function where(bookId, u) {
@@ -291,7 +291,7 @@ const LITX = '해당 없음';
 // 소양은 여러 개 가능(lits). 예전 기록은 lit 하나를 읽음. '해당 없음'은 다른 것과 같이 고를 수 없음
 const litsOf = (it) => (it && Array.isArray(it.lits) ? it.lits : it && it.lit ? [it.lit] : []).map((l) => LIT_RENAME[l] || l);
 const LIT_ELEMS = () => litList().filter((l) => l !== LITX);
-const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : lit === '통계적 추론' ? '추' : litShort(lit)[0]);
+const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : lit === '비판적 태도' ? '비' : litShort(lit)[0]);
 const codeStr = (it) => codesOf(it).join('·');
 // 목록·박스에 보이는 짧은 표시: 코드 + 소양 첫 글자 (예: R2 절, I1 의, R3 X)
 const markStr = (it) => [codeStr(it), ...litsOf(it).map(litMark)].filter(Boolean).join(' ');
@@ -558,7 +558,7 @@ const AGREED_CASES = {
   m153a_025: { code: 'R2+R3' }, m153b_029: { code: 'R2+R3' }, d153b_015: { code: 'R2+R3' }, m225_016: { code: 'I1+R3' }, d221e_011: { code: 'I1+R3' },
   m221_008: { lit: '의사소통' }, m222_000: { lit: '의사소통' }, d151d_000: { lit: '의사소통' },
 };
-const LIT_P = '통계·수학적 지식의 절차적 활용', LIT_R = '통계적 추론', LIT_C = '의사소통';
+const LIT_P = '통계·수학적 지식의 절차적 활용', LIT_R = '비판적 태도', LIT_C = '의사소통';
 // 한 사람의 코딩이 조 합의와 다른 점: 이유 목록. 고치면 사라짐. 기준은 2차 합의(11/3) — 10/27에만 있던 규칙(설명하시오≠의사소통, 퍼센트=R3, 유용성=X)은 칠하지 않음
 function agreeIssues(u, it) {
   if (!u || !it || !isDone(it)) return [];
@@ -566,11 +566,11 @@ function agreeIssues(u, it) {
   const out = [], c = AGREED_CASES[u.id];
   if (c && c.code && [...cs].sort().join('+') !== c.code) out.push(`사례 합의(11/3): 코드 ${c.code}`);
   if (c && c.lit === '절차' && (!has(LIT_P) || has(LIT_R) || has(LITX))) out.push('사례 합의(11/3): 소양 절차');
-  if (c && c.lit === '추론' && (!has(LIT_R) || has(LIT_P))) out.push('사례 합의(11/3): 소양 추론');
+  if (c && c.lit === '추론' && (!has(LIT_R) || has(LIT_P))) out.push('사례 합의(11/3): 소양 비판적 태도');
   if (c && c.lit === '의사소통' && !has(LIT_C)) out.push('사례 합의(11/3): 의사소통');
   const say = RULE_HINTS[u.id] || /말하|말해|이야기|토론|토의|발표/.test(t);
   if (!has(LIT_C) && say && !cs.includes('X')) out.push("'말하시오'(말하고·토론 포함)는 의사소통(11/3)");
-  if (cs.length && cs.every((x) => /^[FP]/.test(x)) && !has(LIT_P) && !has(LIT_R)) out.push('F·P 단위도 소양은 절차, 판단이 들어가면 추론(11/3)');
+  if (cs.length && cs.every((x) => /^[FP]/.test(x)) && !has(LIT_P) && !has(LIT_R)) out.push('F·P 단위도 소양은 절차, 판단이 들어가면 비판적 태도(11/3)');
   return [...new Set(out)];
 }
 // 내 코딩이 합의와 다른 점 (코딩 화면용)
@@ -1189,7 +1189,7 @@ function kalpha(rows) {
   return De === 0 ? NaN : 1 - ((n - 1) * Do) / De;
 }
 const mean = (xs) => { const v = xs.filter((x) => !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; };
-// CSV: 소양 열 4개(절차적 활용·통계적 추론·의사소통·해당 없음)를 예/아니오로
+// CSV: 소양 열 4개(절차적 활용·비판적 태도·의사소통·해당 없음)를 예/아니오로
 const LIT_HEAD = () => litList().map((l) => '소양: ' + litShort(l));
 const litCols = (it) => litList().map((l) => (litsOf(it).includes(l) ? '예' : '아니오'));
 const litShort = (c) => ({ '통계·수학적 지식의 절차적 활용': '절차적 활용' })[c] || c;
@@ -2013,7 +2013,7 @@ async function uploadPackage(file, many = false) {
 init().catch((e) => { console.error(e); saveState('오류: ' + e.message, true); });
 
 // ───────── 인쇄: 지금 고른 책 전체를 펼침면(두 쪽씩)으로. 상자 번호 + 상자 오른쪽 아래에 지금 코더의 코드·소양 ─────────
-const litWord = (l) => (l === '통계·수학적 지식의 절차적 활용' ? '절차' : l === '통계적 추론' ? '추론' : l);
+const litWord = (l) => (l === '통계·수학적 지식의 절차적 활용' ? '절차' : l === '비판적 태도' ? '비판' : l);
 async function printBook() {
   if (!S.book || isCur()) { toast('교과서를 먼저 고르세요'); return; }
   const m = S.metas[S.book]; if (!m || !m.pages) return;
@@ -2065,6 +2065,7 @@ const AGREE = {
     title: '② 11/3 조 회의 합의', tag: '11/3 회의', cls: 'ok',
     note: '11/3 조 회의에서 실제 사례를 보고 정한 내용. 안건 3(교육과정 "뜻을 안다")은 이번에 정하지 않음.',
     rules: [
+      { t: "(11/5 조 회의) 소양 '통계적 추론'을 '비판적 태도'로 이름만 바꿈. 판정 기준은 그대로이고, 아래 글의 '추론'은 비판적 태도를 뜻함", ex: [] },
       { t: '상대도수 그래프·분포에서 값을 읽어 도수(개수)를 구하는 발문, 두 집단의 분포를 비교하는 상황에서 상대도수를 다루는 진술은 R3 (사례로 합의, 일반 규칙은 미정)', ex: [['C2022', 'c22013'], ['M09-2', 'm092_097'], ['M15-1a', 'm151a_052']] },
       { t: '자료 수집(P) 단위도 소양은 절차적 활용. 배운 대로를 넘어 학생의 판단이 들어가면 통계적 추론 (예: 2022 "통계적 탐구 문제를 설정한다" = 추론)', ex: [['C2022', 'c22016'], ['C2022', 'c22015'], ['D15-1b', 'd151b_012']] },
       { t: '소양: 앞에서 배운 방법을 그대로 쓰면 절차, 이유·근거를 설명하거나 주장을 평가하거나 안 배운 상황을 스스로 해석하면 추론. 교육과정 "해석할 수 있다" = 절차, "분포의 특성을 설명할 수 있게 한다" = 추론', ex: [['C2022', 'c22009'], ['C2009', 'c09016'], ['M09-2', 'm092_077']] },
@@ -2089,7 +2090,7 @@ const AGREE = {
   },
 };
 const AG = { units: {}, final: {} };
-const LIT_SHORT = (l) => ({ '통계·수학적 지식의 절차적 활용': '절차', '통계적 추론': '추론', '비판적 평가': '추론', '의사소통': '의사소통', '해당 없음': '해당 없음' }[l] || l);
+const LIT_SHORT = (l) => ({ '통계·수학적 지식의 절차적 활용': '절차', '비판적 태도': '비판', '통계적 추론': '비판', '비판적 평가': '비판', '의사소통': '의사소통', '해당 없음': '해당 없음' }[l] || l);
 function agBookLabel(id) { const m = S.metas[id] || {}; return isCur(id) ? bookName(id) : `${pubName(m.publisher) || ''} ${m.period || ''} ${m.title || id}`.trim(); }
 async function agUnits(id) { if (!AG.units[id]) AG.units[id] = getStore(`books/${id}/units.json`).then((r) => ((r.data || {}).units) || []); return AG.units[id]; }
 async function cropUnit(bookId, u, maxW = 420) {
@@ -2120,7 +2121,7 @@ function renderCodebook() {
   const stageOnly = ['F', 'P', 'R', 'I'].map((k) => `<tr class="cb-${k}"><td class="cb-code">${k}</td><td>단계만</td><td colspan="2">${esc(JK_TIPS[k] || '')}</td></tr>`).join('');
   const LIT_SRC = {
     '통계·수학적 지식의 절차적 활용': "이지연·임해미(2021, pp. 198–199) 요소 C '수학적·통계적 지식'. Gal(2002, p. 4)의 지식 요소(통계적·수학적 지식). Ben-Zvi & Garfield(2004, p. 7)의 통계적 소양(기본 기능, 개념·어휘·기호 이해)",
-    '통계적 추론': "이지연·임해미(2021, pp. 198–199) 요소 E '비판적 태도'(아이디어에 문제를 제기하거나 평가, 오류 판단). Gal(2002, pp. 2–3) '해석하고 비판적으로 평가'. 이름은 Ben-Zvi & Garfield(2004, p. 7)·delMas(2002)의 통계적 추론(자료·표현·요약에 근거한 해석, 결과가 왜·어떻게 나왔는지 설명)에 따라 바꿈",
+    '비판적 태도': "이지연·임해미(2021, pp. 198–199) 요소 E '비판적 태도'(아이디어에 문제를 제기하거나 평가, 오류 판단). Gal(2002, pp. 2–3) '해석하고 비판적으로 평가'. 이름은 Ben-Zvi & Garfield(2004, p. 7)·delMas(2002)의 통계적 추론(자료·표현·요약에 근거한 해석, 결과가 왜·어떻게 나왔는지 설명)에 따라 '통계적 추론'으로 바꿨다가, 11/5 조 회의에서 '비판적 태도'로 이름만 다시 바꿈(통계적 추론 과정에는 비판적 태도가 필요). 판정: 과제가 비판적 태도를 발휘하도록 요구하는가",
     '의사소통': "이지연·임해미(2021, pp. 198–199) 요소 F '의사소통'(다른 사람과 의사소통하며 다양한 관점을 존중하고 토론). Gal(2002, pp. 2–3) '논하고 의사소통하는 능력'",
     '해당 없음': '세 요소 모두 해당하지 않을 때',
   };
