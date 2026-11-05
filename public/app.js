@@ -301,8 +301,7 @@ const CELL_ALL = CELL_ROWS.flatMap(([r]) => CELL_COLS.map(([c]) => r + c)).filte
 const stRow = (code) => ({ F: 'F', P: 'C', R: 'A', I: 'I' })[String(code || '')[0]] || '';
 const litCol = (l) => (/절차|지식/.test(l) ? 'K' : /추론|비판/.test(l) ? 'R' : /의사/.test(l) ? 'C' : '');
 // 결과: { cells, src } src = 저장 | 바로 | 추정 | 다시 | 없음
-function cellsOf(it) {
-  if (it && Array.isArray(it.cells)) return { cells: it.cells, src: '저장' };
+function deriveCells(it) {
   const rows = [...new Set(codesOf(it).map(stRow).filter(Boolean))];
   const cols = [...new Set(litsOf(it).map(litCol).filter(Boolean))];
   if (!rows.length || !cols.length) return { cells: [], src: '없음' };
@@ -310,7 +309,17 @@ function cellsOf(it) {
   const src = rows.length === 1 ? (cells.length ? '바로' : '다시') : cols.length === 1 ? '추정' : '다시';
   return { cells, src };
 }
-const CELL_SRC_TXT = { 저장: '내가 고른 칸', 바로: '예전 코딩에서 자동 계산(단계 1개라 정확)', 추정: '예전 코딩에서 추정(단계 여러 개) · 확인해 주세요', 다시: '예전 코딩으로는 칸을 정할 수 없어요 · 다시 골라 주세요', 없음: '해당 칸 없음(X·해당 없음)' };
+function cellsOf(it) {
+  if (it && Array.isArray(it.cells)) return { cells: it.cells, src: it.cellsManual ? '저장' : '자동' };
+  return deriveCells(it);
+}
+// ①② 를 바꾸면 칸을 직접 고르지 않은 단위는 칸도 자동으로 저장(정할 수 없으면 비워 둠)
+function autoCellPatch(it, patch) {
+  if (it.cellsManual) return patch;
+  const d = deriveCells({ ...it, ...patch });
+  return { ...patch, cells: d.src === '바로' || d.src === '추정' || d.src === '없음' ? d.cells : undefined };
+}
+const CELL_SRC_TXT = { 저장: '내가 직접 고른 칸', 자동: '①②에서 자동으로 채운 칸 · 눌러서 고치면 직접 고른 칸이 돼요', 바로: '예전 코딩에서 자동 계산(단계 1개라 정확)', 추정: '예전 코딩에서 추정(단계 여러 개) · 확인해 주세요', 다시: '예전 코딩으로는 칸을 정할 수 없어요 · 다시 골라 주세요', 없음: '해당 칸 없음(X·해당 없음)' };
 const LIT_ELEMS = () => litList().filter((l) => l !== LITX);
 const litMark = (lit) => (!lit ? '' : lit === LITX ? 'X' : lit === '비판적 태도' ? '비' : litShort(lit)[0]);
 const codeStr = (it) => codesOf(it).join('·');
@@ -841,15 +850,15 @@ function renderPanel() {
     ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
     <div class="${S.mine.done ? 'locked' : ''}">
     ${ruleWhy ? `<div class="rulebox">조 합의와 다름: ${esc(ruleWhy.join(' · '))}</div>` : ''}${all3Of(u) ? `<div class="all3box">세 명이 모두 다르게 고름(${esc(all3Of(u).join('·'))}) · 회의에서 정할 단위</div>` : ''}
+    ${(() => { const cv = cellsOf(it); return `<div class="step"><span class="stepn ${cv.src === '저장' || cv.src === '자동' ? 'ok' : ''}">${cv.src === '저장' || cv.src === '자동' ? '✓' : '⊞'}</span>4×3 칸 <span class="opt">시험</span><span class="hint step-hint">여러 개 가능 · 아래 ①②를 고르면 자동으로 채워져요</span></div>
+    <div class="cell-src src-${cv.src}">${esc(CELL_SRC_TXT[cv.src])}${(cv.src === '바로' || cv.src === '추정') && cv.cells.length ? ' <button id="cellKeep">이대로 저장</button>' : ''}${cv.src === '저장' ? ' <button id="cellReset">①② 기준으로 되돌리기</button>' : ''}</div>
+    <table class="cell-grid"><tr><th></th>${CELL_COLS.map(([c, n]) => `<th>${esc(n)}</th>`).join('')}</tr>
+    ${CELL_ROWS.map(([r, rn]) => `<tr><th>${esc(rn)}</th>${CELL_COLS.map(([c]) => { const k = r + c; return CELL_OFF.has(k) ? '<td class="off">—</td>' : `<td><button data-cell="${k}" class="${cv.cells.includes(k) ? (cv.src === '저장' || cv.src === '자동' ? 'on' : 'auto') : ''}">${k}</button></td>`; }).join('')}</tr>`).join('')}</table>`; })()}
     <div class="step"><span class="stepn ${codesOf(it).length ? 'ok' : ''}">${codesOf(it).length ? '✓' : '1'}</span>문제해결 코드 ${(disOf(u) || []).includes('코드') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">${isTouch() ? '여러 개 가능 · 꾸욱 누르면 설명' : '여러 개 가능 · 올리면 설명'}</span></div>
     <div class="code-grid">${stages.map((s) => `<div class="st" style="color:${stageColor(s.codes[0].code)}">${esc(s.stage.split(' ')[0])}</div>
       <div class="codes">${s.codes.map((c) => `<button data-code="${esc(c.code)}" class="${codesOf(it).includes(c.code) ? 'on' : (c.code !== 'X' && codesOf(it).includes('X') ? 'xoff' : '')}" style="${codesOf(it).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}"><b>${c.code === 'X' && codesOf(it).includes('X') ? '✕ ' : ''}${esc(c.code)}</b>${esc(c.name)}</button>`).join('')}</div>`).join('')}</div>
     <div class="step"><span class="stepn ${litsOf(it).length ? 'ok' : ''}">${litsOf(it).length ? '✓' : '2'}</span>통계적 소양 ${(disOf(u) || []).includes('소양') ? '<span class="distag">세 명 다름</span>' : ''}${reqHere ? '<span class="req">필수</span>' : '<span class="opt">선택</span>'}<span class="hint step-hint">해당하는 것 모두 · 요소마다 따로 판단</span></div>
     <div class="lit-grid">${litList().map((c) => `<button data-lit="${esc(c)}" class="${litsOf(it).includes(c) ? 'on' : (c !== LITX && litsOf(it).includes(LITX) ? 'xoff' : '')} ${c === LITX ? 'litx' : ''}" title="${esc(LIT_DESC[c] || '')}"><b>${c === LITX ? (litsOf(it).includes(LITX) ? '<i class="cb">✕</i>' : '') : `<i class="cb">${litsOf(it).includes(c) ? '☑' : '☐'}</i>`}${litBadge(c)} ${esc(litShort(c))}</b><span>${esc(LIT_DESC[c] || '')}</span></button>`).join('')}</div>
-    ${(() => { const cv = cellsOf(it); return `<div class="step"><span class="stepn ${cv.src === '저장' ? 'ok' : ''}">${cv.src === '저장' ? '✓' : '3'}</span>4×3 칸 <span class="opt">시험</span><span class="hint step-hint">여러 개 가능 · 예전 ①② 값은 그대로 남아요</span></div>
-    <div class="cell-src src-${cv.src}">${esc(CELL_SRC_TXT[cv.src])}${cv.src !== '저장' && cv.cells.length ? ' <button id="cellKeep">이대로 저장</button>' : ''}${cv.src === '저장' ? ' <button id="cellReset">자동 계산으로 되돌리기</button>' : ''}</div>
-    <table class="cell-grid"><tr><th></th>${CELL_COLS.map(([c, n]) => `<th>${esc(n)}</th>`).join('')}</tr>
-    ${CELL_ROWS.map(([r, rn]) => `<tr><th>${esc(rn)}</th>${CELL_COLS.map(([c]) => { const k = r + c; return CELL_OFF.has(k) ? '<td class="off">—</td>' : `<td><button data-cell="${k}" class="${cv.cells.includes(k) ? (cv.src === '저장' ? 'on' : 'auto') : ''}">${k}</button></td>`; }).join('')}</tr>`).join('')}</table>`; })()}
     <textarea id="cMemo" rows="1" class="memo" placeholder="메모 (선택) — 판단 근거나 헷갈린 점" ${S.mine.done ? 'disabled' : ''}>${esc(it.memo)}</textarea>
     </div>
     <div class="next-row"><span class="status ${isDone(it) ? 'ok' : ''}">${statusTxt}</span><button id="goNext" class="primary">다음 ▶</button></div>`}
@@ -897,7 +906,7 @@ function renderPanel() {
       else { set.delete('X'); set.has(v) ? set.delete(v) : set.add(v); }
       const order = codeList().map((c) => c.code); const codes = [...set].sort((a, c) => order.indexOf(a) - order.indexOf(c));
       const code = b.dataset.code;
-      setItem(u.id, { codes, code: codes[0] || '' });
+      setItem(u.id, autoCellPatch(it, { codes, code: codes[0] || '' }));
     };
     // 마우스를 올리면 버튼 바로 밑에 설명
     b.onmouseenter = () => { if (!isTouch()) showTip(); };
@@ -909,15 +918,15 @@ function renderPanel() {
     let next;
     if (v === LITX) next = cur.includes(LITX) ? [] : [LITX];
     else { const set = new Set(cur.filter((x) => x !== LITX)); set.has(v) ? set.delete(v) : set.add(v); next = litList().filter((x) => set.has(x)); }
-    setItem(u.id, { lits: next });
+    setItem(u.id, autoCellPatch(it, { lits: next }));
   });
   P.querySelectorAll('[data-cell]').forEach((b) => b.onclick = () => {
     const set = new Set(cellsOf(it).cells); const k = b.dataset.cell;
     set.has(k) ? set.delete(k) : set.add(k);
-    setItem(u.id, { cells: CELL_ALL.filter((x) => set.has(x)) });
+    setItem(u.id, { cells: CELL_ALL.filter((x) => set.has(x)), cellsManual: true });
   });
   if ($('#cellKeep')) $('#cellKeep').onclick = () => setItem(u.id, { cells: cellsOf(it).cells });
-  if ($('#cellReset')) $('#cellReset').onclick = () => { const n = { ...(S.mine.items[u.id] || {}) }; delete n.cells; S.mine.items[u.id] = n; setItem(u.id, {}); };
+  if ($('#cellReset')) $('#cellReset').onclick = () => { const n = { ...(S.mine.items[u.id] || {}) }; delete n.cells; delete n.cellsManual; S.mine.items[u.id] = n; setItem(u.id, autoCellPatch(n, {})); };
   $('#cMemo').oninput = (e) => setItem(u.id, { memo: e.target.value }, false);
 }
 
