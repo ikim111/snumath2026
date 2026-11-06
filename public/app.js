@@ -968,6 +968,34 @@ function setItem(id, patch, rerender = true) {
 }
 const SAVE_DELAY = 8000; // 자동 저장 간격(ms): 저장소 쓰기 횟수를 줄이려고 길게
 function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(() => { mineTimer = null; saveMine(); }, SAVE_DELAY); }
+
+// 11/6: 내 코딩 전체에서 칸을 직접 고르지 않았고 ①②로 정할 수 있는 단위(바로·추정·없음)의 칸을 한꺼번에 저장. ①② 값은 안 바꿈
+async function bulkSaveCells() {
+  if (!S.coder) { toast('내 이름을 먼저 고르세요'); return; }
+  if (!confirm(`${S.coder} 코딩 전체(모든 목록)에서 ①②로 칸을 정할 수 있는 단위의 4×3 칸을 저장할까요?\n①② 값과 직접 고른 칸은 그대로 두고, 칸을 정할 수 없는 단위(단계·소양 둘 다 여러 개)는 비워 둡니다.`)) return;
+  if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; await saveMine(); }
+  let saved = 0, left = 0, books = 0;
+  for (const id of S.cfg.books) {
+    try {
+      const r = await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`);
+      if (!r.data || !r.data.items) continue;
+      const items = r.data.items; let n = 0;
+      for (const [k, it] of Object.entries(items)) {
+        if (!it || it.cellsManual || Array.isArray(it.cells)) continue;
+        if (!codesOf(it).length && !litsOf(it).length) continue;
+        const d = deriveCells(it);
+        if (d.src === '다시') { left++; continue; }
+        items[k] = { ...it, cells: d.cells }; n++;
+      }
+      if (!n) continue;
+      const w = await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`, { method: 'PUT', body: JSON.stringify({ data: { ...r.data, updated: Date.now() }, etag: r.etag }) });
+      if (!w.ok) { toast(`${id} 저장 실패 — 다시 눌러 주세요`); continue; }
+      saved += n; books++;
+    } catch (e) { toast(`${id} 저장 실패: ${e.message}`); }
+  }
+  await loadMine(); renderAll();
+  toast(`칸 저장 ${saved}단위(${books}개 목록) · 다시 골라야 하는 단위 ${left}개`);
+}
 async function saveMine(retry = true) {
   if (!S.coder || !S.book) return;
   const sig = S.book + '|' + S.coder + '|' + JSON.stringify([S.mine.done, S.mine.items]);
@@ -1059,6 +1087,7 @@ function bindCoding() {
   $('#editMode').onchange = (e) => { S.edit = e.target.checked; S.draw = false; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
   $('#addBox').onclick = () => { S.draw = !S.draw; renderPage(); if (S.draw) toast('쪽 이미지에서 끌어서 새 박스를 그리세요'); };
   $('#onlyTodo').onchange = renderList;
+  $('#bulkCells').onclick = bulkSaveCells;
   $('#doneBtn').onclick = async () => {
     if (!S.mine.done) {
       const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
