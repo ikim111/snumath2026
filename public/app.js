@@ -292,11 +292,11 @@ const LITX = '해당 없음';
 const litsOf = (it) => (it && Array.isArray(it.lits) ? it.lits : it && it.lit ? [it.lit] : []).map((l) => LIT_RENAME[l] || l);
 
 // ───────── 4×3 칸 (11/6, 이성식 제안) ─────────
-// 단계(F 문제 설정, C 자료 수집, A 자료 분석, I 결과 해석) × 소양(K 지식, R 추론과 판단, C 의사소통). IK 칸은 없음.
+// 단계(F 문제 설정, C 자료 수집, A 자료 분석, I 결과 해석) × 소양(K 지식, R 추론과 판단, C 의사소통). 12칸 모두.
 // 저장은 새 항목 cells(여러 개 가능). 예전 codes·lits는 그대로 두고, cells가 없으면 codes×lits로 계산해서 보여 주기만 함(저장 안 함).
 const CELL_ROWS = [['F', '문제 설정'], ['C', '자료 수집'], ['A', '자료 분석'], ['I', '결과 해석']];
 const CELL_COLS = [['K', '통계적·수학적 지식'], ['R', '통계적 추론과 판단'], ['C', '의사소통']];
-const CELL_OFF = new Set(['IK']);
+const CELL_OFF = new Set(); // 11/6 IK 칸 열음(김형준 요청). 표3 원안은 IK 제외
 const CELL_ALL = CELL_ROWS.flatMap(([r]) => CELL_COLS.map(([c]) => r + c)).filter((x) => !CELL_OFF.has(x));
 const stRow = (code) => ({ F: 'F', P: 'C', R: 'A', I: 'I' })[String(code || '')[0]] || '';
 const litCol = (l) => (/절차|지식/.test(l) ? 'K' : /추론|비판/.test(l) ? 'R' : /의사/.test(l) ? 'C' : '');
@@ -981,10 +981,11 @@ async function bulkSaveCells() {
       if (!r.data || !r.data.items) continue;
       const items = r.data.items; let n = 0;
       for (const [k, it] of Object.entries(items)) {
-        if (!it || it.cellsManual || Array.isArray(it.cells)) continue;
+        if (!it || it.cellsManual) continue; // 직접 고른 칸만 건너뜀, 자동 칸은 다시 계산
         if (!codesOf(it).length && !litsOf(it).length) continue;
         const d = deriveCells(it);
-        if (d.src === '다시') { left++; continue; }
+        if (d.src === '다시') { left++; if (Array.isArray(it.cells)) { const x = { ...it }; delete x.cells; items[k] = x; n++; } continue; }
+        if (JSON.stringify(it.cells) === JSON.stringify(d.cells)) continue;
         items[k] = { ...it, cells: d.cells }; n++;
       }
       if (!n) continue;
