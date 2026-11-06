@@ -416,3 +416,4 @@ table.cb-t tr.cb-X td.cb-code { border-left-color: var(--X); }
 .cell-grid button { width: 100%; padding: 6px 0; font-weight: 700; }
 .cell-grid button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
 .cell-grid button.auto { border: 2px dashed var(--ink); }
+.cell-grid button.cellx { font-weight: 600; }
