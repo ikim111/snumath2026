@@ -1316,19 +1316,30 @@ function majority(vals) {
 // 일치율 계산: units(분석 단위), items(코더 → 그 코더의 items), coders
 // 11/10: 4×3 칸 기준 일치율. 칸마다 '붙였다/안 붙였다' Fleiss κ·α를 구해 평균(아무도 안 붙인 칸은 뺌), 단계(F·C·A·I)·소양(K·R·C)도 같은 방식
 const CELLS12 = ['FK', 'FR', 'FC', 'CK', 'CR', 'CC', 'AK', 'AR', 'AC', 'IK', 'IR', 'IC', 'X'];
+// 11/10: 일치율은 분석 단위(교육과정 원래 문장·교과서 큰 과제)로 계산. 코더마다 하위 문항의 칸을 합친 뒤
+// 단계 묶음(F·C·A·I)과 소양 묶음(K·R·C)을 따로 비교. 예: (1) AK, (2) AR IR → 단계 A·I, 소양 K·R
 function cellAgree(units, items, coders) {
-  const cs = (c, u) => { const it = items(c)[u.id]; return it && Array.isArray(it.cells) ? it.cells : null; };
-  const U = units.filter((u) => coders.every((c) => cs(c, u) && cs(c, u).length));
-  const sets = U.map((u) => coders.map((c) => [...cs(c, u)].sort().join('+')));
+  const byBook = new Map(); units.forEach((u) => { const b = u._book || S.book; if (!byBook.has(b)) byBook.set(b, []); byBook.get(b).push(u); });
+  const groups = [];
+  byBook.forEach((us, b) => { const m = auMap(us, isCur(b), b), g = new Map(); us.forEach((u) => { const k = m.get(u.id); if (!g.has(k)) { g.set(k, { key: k, book: b, list: [] }); groups.push(g.get(k)); } g.get(k).list.push(u); }); });
+  const cs1 = (c, u) => { const it = items(c)[u.id]; return it && Array.isArray(it.cells) && it.cells.length ? it.cells : null; };
+  // 코더가 그 분석 단위의 하위 문항을 모두 칸 저장했을 때만 합친 칸, 아니면 null
+  const cs = (c, g) => { if (!g.list.every((u) => cs1(c, u))) return null; const set = new Set(g.list.flatMap((u) => cs1(c, u))); if (set.size > 1) set.delete('X'); return [...set]; };
+  const U = groups.filter((g) => coders.every((c) => cs(c, g)));
+  const C = new Map(U.map((g) => [g, coders.map((c) => cs(c, g))]));
+  const sets = U.map((g) => C.get(g).map((x) => [...x].sort().join('+')));
   const same = sets.filter((r) => r.every((x) => x === r[0])).length;
-  const stat = (has, cats) => { const per = {}; cats.forEach((k) => { const rows = U.map((u) => coders.map((c) => has(cs(c, u), k))); const any = rows.some((r) => r.some(Boolean)); if (!any) return; per[k] = { k: fleiss(rows).k, a: kalpha(rows), n: rows.filter((r) => r.some(Boolean)).length, po: rows.filter((r) => r.every((x) => x === r[0])).length / rows.length }; }); const ks = Object.values(per).map((x) => x.k).filter((x) => !isNaN(x)), as = Object.values(per).map((x) => x.a).filter((x) => !isNaN(x)); return { per, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN, a: as.length ? as.reduce((a, b) => a + b, 0) / as.length : NaN }; };
+  const stat = (has, cats) => { const per = {}; cats.forEach((k) => { const rows = U.map((g) => C.get(g).map((x) => has(x, k))); const any = rows.some((r) => r.some(Boolean)); if (!any) return; per[k] = { k: fleiss(rows).k, a: kalpha(rows), n: rows.filter((r) => r.some(Boolean)).length, po: rows.filter((r) => r.every((x) => x === r[0])).length / rows.length }; }); const ks = Object.values(per).map((x) => x.k).filter((x) => !isNaN(x)), as = Object.values(per).map((x) => x.a).filter((x) => !isNaN(x)); return { per, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN, a: as.length ? as.reduce((a, b) => a + b, 0) / as.length : NaN }; };
   const cell = stat((c, k) => c.includes(k), CELLS12);
   const st = stat((c, k) => c.some((x) => x.length === 2 && x[0] === k), ['F', 'C', 'A', 'I']);
   const lit = stat((c, k) => c.some((x) => x.length === 2 && x[1] === k), ['K', 'R', 'C']);
-  // 단위마다 단계 묶음(F·C·A·I 중 무엇을 붙였나)·소양 묶음(K·R·C)이 모두 같은지
-  const part = (i) => U.map((u) => coders.map((c) => [...new Set(cs(c, u).filter((x) => x.length === 2).map((x) => x[i]))].sort().join('+') || 'X')).filter((r) => r.every((x) => x === r[0])).length / (U.length || NaN);
-  const dis = U.filter((u, i) => !sets[i].every((x) => x === sets[i][0])).map((u) => ({ u, by: coders.map((c) => [c, [...cs(c, u)]]) }));
-  return { n: U.length, total: units.length, po: U.length ? same / U.length : NaN, k: cell.k, a: cell.a, per: cell.per, stK: st.k, litK: lit.k, st, lit, stPo: part(0), litPo: part(1), dis };
+  const partOf = (x, i) => [...new Set(x.filter((y) => y.length === 2).map((y) => y[i]))].sort().join('') || 'X';
+  const part = (i) => U.filter((g) => C.get(g).every((x) => partOf(x, i) === partOf(C.get(g)[0], i))).length / (U.length || NaN);
+  const title = (g) => { const u = g.list[0]; return isCur(g.book) ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || ''); };
+  const dis = U.filter((g) => C.get(g).some((x) => partOf(x, 0) !== partOf(C.get(g)[0], 0) || partOf(x, 1) !== partOf(C.get(g)[0], 1)))
+    .map((g) => ({ u: g.list[0], g, title: title(g), n: g.list.length, by: coders.map((c, i) => [c, C.get(g)[i], partOf(C.get(g)[i], 0), partOf(C.get(g)[i], 1)]) }));
+  const mine = coders.map((c) => groups.map((g) => cs(c, g)).filter(Boolean));
+  return { mine, n: U.length, total: groups.length, po: U.length ? same / U.length : NaN, k: cell.k, a: cell.a, per: cell.per, stK: st.k, litK: lit.k, st, lit, stPo: part(0), litPo: part(1), dis };
 }
 function agreeStats(units, items, coders) {
   const lv = (code) => levelOf(code, CMP.level);
@@ -1412,17 +1423,14 @@ async function renderOverview() {
     let fin = 0, tot = 0;
     open.forEach((id) => {
       const o = OV.cache[id]; const us = o.units.filter((x) => CMP.kinds.includes(x.kind || 'main'));
-      us.forEach((x) => { units.push(x); if (codesOf(o.fin[x.id]).length) fin++; });
+      us.forEach((x) => { units.push({ ...x, _book: id }); if (codesOf(o.fin[x.id]).length) fin++; });
       tot += us.length;
       coders.forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
     });
-    const st = units.length ? agreeStats(units, (c) => itemsBy[c], coders) : null;
     const cst = units.length ? cellAgree(units, (c) => itemsBy[c], coders) : null;
-    return { open: open.length, all: ids.length, st, cst, fin, tot };
+    return { open: open.length, all: ids.length, cst, fin, tot };
   };
   const c43 = (x) => x.cst ? `<td>${x.cst.n}/${x.cst.total}</td><td>${pct(x.cst.stPo)}</td><td><b>${kfmt(x.cst.stK)}</b> <span class="hint">${kappaWord(x.cst.stK)}</span></td><td>${pct(x.cst.litPo)}</td><td><b>${kfmt(x.cst.litK)}</b> <span class="hint">${kappaWord(x.cst.litK)}</span></td><td class="hint">${pct(x.cst.po)}</td><td class="hint">${kfmt(x.cst.k)}</td>` : `<td colspan="7" class="hint">비교 전</td>`;
-  const cells = (x) => x.st ? `<td>${x.st.fl.n}</td><td>${pct(x.st.fl.po)}</td><td>${kfmt(x.st.fl.k)} <span class="hint">${kappaWord(x.st.fl.k)}</span></td><td>${kfmt(x.st.fl.a)}</td><td>${kfmt(x.st.flLit.k)} <span class="hint">${kappaWord(x.st.flLit.k)}</span></td><td>${kfmt(x.st.flLit.a)}</td><td>${x.fin}/${x.tot}</td>`
-    : `<td colspan="7" class="hint">비교 전</td>`;
   const done = (id) => { const o = OV.cache[id]; return coders.map((c) => `${c[0]}${o && o.r.status && o.r.status[c] ? '✓' : '·'}`).join(' '); };
   const meta = (id) => S.metas[id] || {};
   const rows = [];
@@ -1451,9 +1459,9 @@ async function renderOverview() {
   OV.rows = [...totRows, ...rows];
   box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>${whoBox()}${whoWarn()}
     <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요(합계·'전체' 줄은 합쳐서). 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
-    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>4×3 단위<br><span class="hint">모두 칸 저장/전체</span></th><th>문제해결 단계<br>완전 일치</th><th>단계 κ<br><span class="hint">F·C·A·I 평균</span></th><th>통계적 소양<br>완전 일치</th><th>소양 κ<br><span class="hint">K·R·C 평균</span></th><th class="hint">4×3 완전 일치</th><th class="hint">4×3 칸 κ</th><th class="hint">①② 단위</th><th class="hint">①② 완전 일치</th><th class="hint">①② 코드 κ</th><th class="hint">①② 코드 α</th><th class="hint">①② 소양 κ</th><th class="hint">①② 소양 α</th><th>최종 확정</th></tr>
-    ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
-    ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
+    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>분석 단위<br><span class="hint">모두 코딩/전체</span></th><th>문제해결 단계<br>완전 일치</th><th>단계 κ<br><span class="hint">F·C·A·I 평균</span></th><th>통계적 소양<br>완전 일치</th><th>소양 κ<br><span class="hint">K·R·C 평균</span></th><th class="hint">4×3 완전 일치</th><th class="hint">4×3 칸 κ</th></tr>
+    ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}</tr>`).join('')}
+    ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}</tr>`).join('')}
     </table></div>
     <div class="bar"><button id="exportOvX">엑셀로 받기 (한눈에 보기 + 전체 단위)</button><button id="exportOv">한눈에 보기 CSV</button></div>`;
   bindWho(box, () => { renderOverview(); renderCompare(); });
@@ -1472,8 +1480,8 @@ async function renderOverview() {
 
 function ovRows(num = false) {
   const n3 = (v) => (isNaN(v) ? '' : num ? +v.toFixed(3) : v.toFixed(3));
-  const rows = [['목록', '완료', '단위 수(세 명 모두 코딩)', '세 명 코드 완전 일치율', '코드 Fleiss κ(코드별 평균)', '코드 Krippendorff α', '세 명 소양 완전 일치율', '소양 Fleiss κ(요소별 평균)', '소양 Krippendorff α', '최종 확정', '전체 단위', '비교 수준', '포함 유형']];
-  (OV.rows || []).forEach((x) => rows.push([x.name.trim(), x.st2, x.st ? x.st.fl.n : '', x.st ? n3(x.st.fl.po) : '', x.st ? n3(x.st.fl.k) : '', x.st ? n3(x.st.fl.a) : '', x.st ? n3(x.st.flLit.po) : '', x.st ? n3(x.st.flLit.k) : '', x.st ? n3(x.st.flLit.a) : '', x.fin, x.tot, { fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level], CMP.kinds.map((k) => KINDS[k]).join('·')]));
+  const rows = [['목록', '완료', '비교한 분석 단위(모두 다 코딩)', '전체 분석 단위', '단계 묶음 완전 일치', '단계 κ(F·C·A·I 평균)', '단계 α', '소양 묶음 완전 일치', '소양 κ(K·R·C 평균)', '소양 α', '4×3 완전 일치', '4×3 칸 κ', '포함 유형', '코더']];
+  (OV.rows || []).forEach((x) => { const c = x.cst; rows.push([x.name.trim(), x.st2, c ? c.n : '', c ? c.total : x.tot, c ? n3(c.stPo) : '', c ? n3(c.stK) : '', c ? n3(c.st.a) : '', c ? n3(c.litPo) : '', c ? n3(c.litK) : '', c ? n3(c.lit.a) : '', c ? n3(c.po) : '', c ? n3(c.k) : '', CMP.kinds.map((k) => KINDS[k]).join('·'), cmpWho().join('·')]); });
   return rows;
 }
 function exportOverviewCSV() { download(`일치율_한눈에보기_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(ovRows())); }
@@ -1523,7 +1531,7 @@ async function exportOverviewXlsx() {
     cmpWho().forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
     Object.assign(fin, o.fin);
   });
-  await saveXlsx(`일치율_전체_${new Date().toISOString().slice(0, 10)}.xlsx`, [['한눈에 보기', ovRows(true)], ['전체 단위 세 명 코딩', unitSheet(units, (c) => itemsBy[c], (u) => fin[u.id])]]);
+  await saveXlsx(`일치율_전체_${new Date().toISOString().slice(0, 10)}.xlsx`, [['한눈에 보기', ovRows(true)], ['전체 단위 코더별 칸', [['목록', '단위', '과제', '발문 요약', ...cmpWho()], ...units.map((u) => [bookName(u._book), u._no, u.task || '', u.summary || '', ...cmpWho().map((c) => { const it = itemsBy[c][u.id]; return it && Array.isArray(it.cells) ? [...it.cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' ') : ''; })])]]]);
 }
 
 // ───────── 비교 화면 ─────────
@@ -1593,241 +1601,64 @@ async function renderCompare() {
   const lv = (code) => levelOf(code, CMP.level);
   const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
   const sameSet = (a, b) => a.join('|') === b.join('|');
-  const { pairs, fl, flLit } = agreeStats(units, items, coders);
   const C4 = cellAgree(units, items, coders);
-  const elRows = { stage: codeElemStats(units, items, coders, 'stage'), fine: codeElemStats(units, items, coders, 'fine') };
-  // 코더별 사용 빈도: 그 사람이 코딩한 단위 중 각 코드·소양을 고른 수
-  const coded = coders.map((c) => units.filter((u) => codesOf(items(c)[u.id]).length));
-  const litCoded = coders.map((c) => units.filter((u) => litsOf(items(c)[u.id]).length));
+  // 코더별 사용 빈도: 그 사람이 다 코딩한 분석 단위(큰 과제·원래 문장) 중 각 단계·소양·칸이 나온 수
+  const cOf = (c, u) => { const it = items(c)[u.id]; return it && Array.isArray(it.cells) && it.cells.length ? it.cells : null; };
+  const saved = C4.mine;
   const freqRows = [
-    ...elRows.stage.map((r) => ({ g: '단계', cat: r.cat, v: coders.map((c, i) => coded[i].filter((u) => codesOf(items(c)[u.id]).some((x) => levelOf(x, 'stage') === r.cat)).length), base: coded })),
-    ...elRows.fine.map((r) => ({ g: '세부 코드', cat: r.cat, v: coders.map((c, i) => coded[i].filter((u) => codesOf(items(c)[u.id]).includes(r.cat)).length), base: coded })),
-    ...litList().map((e) => ({ g: '소양', cat: litShort(e), v: coders.map((c, i) => litCoded[i].filter((u) => litsOf(items(c)[u.id]).includes(e)).length), base: litCoded })),
+    ...[['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']].map(([k, n]) => ({ g: '단계', cat: `${k} ${n}`, v: saved.map((L) => L.filter((x) => x.some((y) => y.length === 2 && y[0] === k)).length) })),
+    ...[['K', '지식'], ['R', '추론·판단'], ['C', '의사소통']].map(([k, n]) => ({ g: '소양', cat: `${k} ${n}`, v: saved.map((L) => L.filter((x) => x.some((y) => y.length === 2 && y[1] === k)).length) })),
+    ...CELLS12.map((k) => ({ g: '칸', cat: k === 'X' ? '해당 없음' : k, v: saved.map((L) => L.filter((x) => x.includes(k)).length) })),
   ];
-
   const kindBoxes = Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${CMP.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ');
-  const levelRadios = [['fine', '세부 코드'], ['basic', '기본 코드'], ['stage', '단계']].map(([k, v]) => `<label><input type="radio" name="lv" value="${k}" ${CMP.level === k ? 'checked' : ''}> ${v}</label>`).join(' ');
-
-  // 다수결 소양: 세 요소마다 두 명 이상 고른 것, 하나도 없으면 '해당 없음'(소양을 고른 사람이 두 명 이상일 때)
-  const majLits = (its) => { if (its.filter((x) => litsOf(x).length).length < 2) return []; const m = LIT_ELEMS().filter((e) => its.filter((x) => litsOf(x).includes(e)).length >= 2); return m.length ? m : [LITX]; };
-  // 다수결 코드 묶음: 두 명 이상이 고른 코드
-  const majCodes = (its) => codeList().map((c) => c.code).filter((c) => its.filter((x) => codesOf(x).includes(c)).length >= 2);
-  const disRows = units.map((u) => {
-    const its = coders.map((c) => items(c)[u.id] || {});
-    const sets = its.map(lvSet);
-    const ls = its.map((x) => [...litsOf(x)].sort());
-    const dis = sets.some((x) => !x.length) || !sets.every((x) => sameSet(x, sets[0])) || ls.some((x) => !x.length) || !ls.every((x) => sameSet(x, ls[0]));
-    const a3 = its.every((x) => isDone(x)) && (new Set(sets.map((x) => x.join('+'))).size === coders.length || new Set(ls.map((x) => x.join('+'))).size === coders.length);
-    const agr = coders.map((c, i) => [c, agreeIssues(u, its[i])]).filter((x) => x[1].length);
-    return { u, its, dis, a3, agr };
-  });
-  const shown = CMP.onlyDis ? disRows.filter((x) => x.dis || x.agr.length) : disRows;
-  const fin = finalState.data.items || {};
-  const finLits = (id, f) => `<div class="fin-codes">${litList().map((l) => `<button data-fl="${esc(l)}" data-fid="${id}" class="${litsOf(f).includes(l) ? 'on' : ''}">${litBadge(l)} ${esc(litShort(l))}</button>`).join('')}</div>`;
-  const finChips = (id, f) => `<div class="fin-codes">${codeList().map((c) => `<button data-fc="${esc(c.code)}" data-fid="${id}" class="${codesOf(f).includes(c.code) ? 'on' : ''}" style="${codesOf(f).includes(c.code) ? `background:${stageColor(c.code)};border-color:${stageColor(c.code)}` : ''}">${esc(c.code)}</button>`).join('')}</div>`;
-  const m = S.metas[S.book];
-  const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
+  const cellTxt = (x) => [...x].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' ');
 
   B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>${whoBox()}${whoWarn()}
     <p>${statusHtml}</p>
-    <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
+    <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
     <h4>요소별 일치도</h4>
     <div class="cards">
       <div class="card"><div class="k">통계적 문제해결 단계</div><div class="v">${kfmt(C4.stK)}</div><div class="hint">F·C·A·I κ 평균 · 단계 묶음 완전 일치 ${pct(C4.stPo)}</div></div>
       <div class="card"><div class="k">통계적 소양</div><div class="v">${kfmt(C4.litK)}</div><div class="hint">K·R·C κ 평균 · 소양 묶음 완전 일치 ${pct(C4.litPo)}</div></div>
-      <div class="card"><div class="k">비교한 단위</div><div class="v">${C4.n}</div><div class="hint">모두 4×3 칸을 저장한 단위 (전체 ${C4.total}개)</div></div>
+      <div class="card"><div class="k">비교한 분석 단위</div><div class="v">${C4.n}</div><div class="hint">모두 다 코딩한 큰 과제·원래 문장 (전체 ${C4.total}개)</div></div>
     </div>
     ${(() => { const tb = (title, o, list) => `<table class="t"><tr><th class="l">${title}</th><th>붙인 단위<br><span class="hint">한 명이라도</span></th><th>일치율<br><span class="hint">붙였다/안 붙였다</span></th><th>Fleiss κ</th><th>Krippendorff α</th></tr>${list.map(([k, n]) => { const v = o.per[k]; return `<tr><td class="l">${k} ${n}</td>${v ? `<td>${v.n}</td><td>${pct(v.po)}</td><td><b>${kfmt(v.k)}</b> <span class="hint">${kappaWord(v.k)}</span></td><td>${kfmt(v.a)}</td>` : '<td colspan="4" class="hint">아무도 안 붙임</td>'}</tr>`; }).join('')}<tr><td class="l"><b>평균</b></td><td></td><td></td><td><b>${kfmt(o.k)}</b></td><td>${kfmt(o.a)}</td></tr></table>`;
       return tb('통계적 문제해결 단계', C4.st, [['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']]) + tb('통계적 소양', C4.lit, [['K', '지식'], ['R', '추론·판단'], ['C', '의사소통']]); })()}
-    <p class="note">단위마다 '이 단계(또는 소양)를 붙였는가'를 코더끼리 비교해요. 예: 한 사람은 AK, 다른 사람은 AR이면 단계 A는 일치, 소양 K·R은 불일치예요. 붙인 단위가 적은 요소는 κ가 크게 흔들려요.</p>
+    <p class="note">분석 단위(교육과정은 원래 문장 하나, 교과서는 큰 과제 하나)마다 코더별로 하위 문항의 칸을 먼저 합쳐요. 예: 1번 (1) AK, (2) AR IR → 1번은 단계 A·I, 소양 K·R. 그다음 '이 단계(소양)가 있는가'를 코더끼리 비교해요. 하위 문항을 하나라도 안 한 사람이 있으면 그 분석 단위는 빠져요. 붙인 단위가 적은 요소는 κ가 크게 흔들려요.</p>
     <h4>참고: 4×3 칸 기준</h4>
     <div class="cards">
       <div class="card"><div class="k">${coders.length}명 4×3 완전 일치</div><div class="v">${pct(C4.po)}</div><div class="hint">12칸 조합이 모두 같은 비율</div></div>
       <div class="card"><div class="k">칸별 Fleiss κ 평균</div><div class="v">${kfmt(C4.k)}</div><div class="hint">${kappaWord(C4.k)} · α ${kfmt(C4.a)}</div></div>
     </div>
     <table class="t"><tr><th></th><th>K 지식</th><th>R 추론·판단</th><th>C 의사소통</th></tr>${[['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']].map(([r, n]) => `<tr><th>${n}</th>${['K', 'R', 'C'].map((c) => { const v = C4.per[r + c]; return `<td>${v ? `<b>${kfmt(v.k)}</b> <span class="hint">(${v.n}단위)</span>` : '<span class="hint">—</span>'}</td>`; }).join('')}</tr>`).join('')}<tr><th>해당 없음</th><td colspan="3">${C4.per.X ? `<b>${kfmt(C4.per.X.k)}</b> <span class="hint">(${C4.per.X.n}단위)</span>` : '<span class="hint">—</span>'}</td></tr></table>
-    <p class="note">괄호는 한 명이라도 그 칸을 붙인 단위 수예요. 단위가 적은 칸은 κ가 크게 흔들려요. 아직 칸을 저장하지 않은 사람이 있으면 그 단위는 빠져요.</p>
-    ${C4.dis.length ? `<details ${G ? '' : 'open'}><summary>4×3 칸이 다른 단위 ${C4.dis.length}개</summary><table class="t"><tr><th class="l">단위</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${C4.dis.map((d) => `<tr><td class="l">${G ? '' : `<a href="#" data-go="${d.u.id}">`}#${d.u._no || unitNo(d.u)} ${esc(d.u.task || '')} <span class="hint">${esc(d.u.summary || '')}</span>${G ? '' : '</a>'}</td>${d.by.map(([c, x]) => `<td style="font-family:var(--mono)">${esc(x.sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '))}</td>`).join('')}</tr>`).join('')}</table></details>` : ''}
-    <h4>①② 기준 (예전 코드·소양)</h4>
-    <div class="cards">
-      <div class="card"><div class="k">세 명 코드 완전 일치</div><div class="v">${pct(fl.po)}</div><div class="hint">세 명 모두 코딩한 ${fl.n}개 기준</div></div>
-      <div class="card"><div class="k">Fleiss' κ (코드별 평균)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
-      <div class="card"><div class="k">최종 코드 확정</div><div class="v">${finDone}/${units.length}</div></div>
-    </div>
-    <table class="t"><tr><th class="l">쌍</th><th>단위 수</th><th>코드 완전 일치율</th><th>Cohen's κ (코드별 평균)</th><th>소양 완전 일치율</th><th>소양 κ (요소별 평균)</th></tr>
-      ${pairs.map((p) => `<tr><td class="l">${esc(p.name)}</td><td>${p.code.n}</td><td>${pct(p.code.po)}</td><td>${kfmt(p.code.k)} <span class="hint">${kappaWord(p.code.k)}</span></td><td>${pct(p.lit.po)}</td><td>${kfmt(p.lit.k)} <span class="hint">${kappaWord(p.lit.k)}</span></td></tr>`).join('')}
-      <tr><td class="l"><b>세 명 (Fleiss)</b></td><td>${fl.n}</td><td>${pct(fl.po)}</td><td>${kfmt(fl.k)}</td><td>${pct(flLit.po)}</td><td>${kfmt(flLit.k)}</td></tr>
-      <tr><td class="l"><b>세 명 (Krippendorff α)</b></td><td>${fl.n}</td><td></td><td>${kfmt(fl.a)}</td><td></td><td>${kfmt(flLit.a)}</td></tr>
+    <p class="note">괄호는 한 명이라도 그 칸이 나온 분석 단위 수예요.</p>
+    ${C4.dis.length ? `<details ${G ? '' : 'open'}><summary>단계·소양이 다른 분석 단위 ${C4.dis.length}개</summary><table class="t"><tr><th class="l">분석 단위</th>${coders.map((c) => `<th>${esc(c)}<br><span class="hint">단계 / 소양</span></th>`).join('')}</tr>${C4.dis.map((d) => { const s0 = d.by[0]; return `<tr><td class="l">${G ? '' : `<a href="#" data-go="${d.u.id}">`}${G ? esc(bookName(d.g.book)) + ' · ' : ''}${esc(d.title)}${G ? '' : '</a>'} <span class="hint">(${d.n}개 문항)</span></td>${d.by.map(([c, x, st, li]) => `<td style="font-family:var(--mono)"><b style="${st !== s0[2] ? 'color:var(--bad)' : ''}">${esc(st.split('').join('·'))}</b> / <b style="${li !== s0[3] ? 'color:var(--bad)' : ''}">${esc(li.split('').join('·'))}</b><br><span class="hint">${esc(cellTxt(x))}</span></td>`).join('')}</tr>`; }).join('')}</table></details>` : ''}
+    <h4>코더별 사용 빈도</h4>
+    <table class="t"><tr><th class="l">구분</th><th class="l">요소·칸</th>${coders.map((c, i) => `<th>${esc(c)}<br><span class="hint">다 코딩한 ${saved[i].length}단위</span></th>`).join('')}</tr>
+      ${freqRows.map((r) => `<tr><td class="l hint">${r.g}</td><td class="l">${esc(r.cat)}</td>${r.v.map((v, i) => `<td>${v} <span class="hint">(${pct(v / saved[i].length)})</span></td>`).join('')}</tr>`).join('')}
     </table>
-    ${[['stage', '단계별 일치 (큰 요소)'], ['fine', '세부 코드별 일치']].map(([lvk, title]) => `<h3>통계적 문제해결: ${title}</h3>
-    <table class="t"><tr><th class="l">${lvk === 'stage' ? '단계' : '코드'}</th><th>고른 단위 수</th><th>세 명 단순 일치율</th><th>Fleiss' κ (세 명)</th><th>α</th>${pairs.map((p) => `<th>${esc(p.name)}<br>일치율 · Cohen κ</th>`).join('')}</tr>
-      ${elRows[lvk].map((r) => `<tr><td class="l">${esc(r.cat)}</td><td>${r.n}</td><td>${pct(r.po)}</td><td>${kfmt(r.k)} <span class="hint">${kappaWord(r.k)}</span></td><td>${kfmt(r.a)}</td>${r.pairs.map((p) => `<td>${pct(p.po)} · ${kfmt(p.k)}</td>`).join('')}</tr>`).join('')}
-    </table>`).join('')}
-    <p class="note">코드(단계)마다 '골랐다/안 골랐다'로 따로 셉니다. <b>고른 단위 수</b> = 세 명 모두 코딩한 단위 중 한 명이라도 그 코드를 고른 단위 수(적으면 κ가 크게 흔들림). <b>단순 일치율</b> = 그 코드를 고른 여부가 같은 단위의 비율. 단계 표는 R1·R2·R3과 단계만 고른 R을 모두 R로 묶습니다. 위 '비교 수준' 선택과 상관없이 두 표 모두 보여 줍니다.</p>
-    <h3>통계적 소양: 요소별 일치</h3>
-    <table class="t"><tr><th class="l">요소</th><th>세 명 단순 일치율</th><th>Fleiss' κ (세 명)</th><th>α</th>${pairs.map((p) => `<th>${esc(p.name)}<br>일치율 · Cohen κ</th>`).join('')}</tr>
-      ${litList().map((e) => `<tr><td class="l">${litBadge(e)} ${esc(litShort(e))}</td><td>${pct(flLit.el[e].po)}</td><td>${kfmt(flLit.el[e].k)} <span class="hint">${kappaWord(flLit.el[e].k)}</span></td><td>${kfmt(flLit.el[e].a)}</td>${pairs.map((p) => `<td>${pct(p.lit.el[e].po)} · ${kfmt(p.lit.el[e].k)}</td>`).join('')}</tr>`).join('')}
-    </table>
-    <p class="note">소양은 여러 개 고를 수 있어서 요소마다 따로 셉니다. <b>단순 일치율</b> = 그 요소를 '골랐다/안 골랐다'가 같은 단위의 비율(세 명은 셋 모두 같은 비율). <b>세 명 κ</b> = 요소마다 Fleiss' κ, <b>두 명씩</b> = 요소마다 Cohen's κ. 위 표의 '소양 κ'는 요소별 κ의 평균이고, '소양 완전 일치율'은 고른 소양 묶음이 똑같은 비율입니다. 거의 모든 단위에서 '예'인 요소는 일치율이 높아도 κ가 낮게 나올 수 있어 일치율을 함께 봅니다. 소양을 모두 입력한 단위(${flLit.n}개)만 셉니다.</p>
-    <p class="note">코드는 여러 개 고를 수 있어서, 완전 일치율은 고른 코드 묶음이 똑같은 단위의 비율이고, κ는 코드마다 '골랐다/안 골랐다'의 κ를 구해 평균한 값입니다. 두 사람이 모두 입력한 단위만 셉니다. κ 해석 기준: Landis & Koch(1977). '단계' 수준은 현재 분석틀(${esc(S.cfg.activeFramework)})의 단계로 묶어 비교합니다.</p>
-
-    <h3>코더별 사용 빈도</h3>
-    <table class="t"><tr><th class="l">구분</th><th class="l">코드·소양</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>
-      ${freqRows.map((r) => `<tr><td class="l hint">${r.g}</td><td class="l">${esc(r.cat)}</td>${r.v.map((v, i) => `<td>${v} <span class="hint">(${pct(v / r.base[i].length)})</span></td>`).join('')}</tr>`).join('')}
-    </table>
-    <p class="note">그 사람이 입력한 단위 중 해당 코드·소양을 고른 단위 수(괄호는 비율). 한 사람만 유난히 많거나 적으면 기준을 다르게 읽었을 가능성이 큽니다.</p>
-    <h3>불일치 행렬</h3>
-    <div class="bar"><label>쌍 <select id="mxPair">${pairs.map((p, i) => `<option value="${i}" ${CMP.mxPair === i ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
-      <label>대상 <select id="mxWhat">${[['fine', '세부 코드'], ['stage', '단계'], ['lit', '소양']].map(([k, v]) => `<option value="${k}" ${CMP.mxWhat === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
-    <div id="mxBox"></div>
-    <p class="note">행 = 앞사람, 열 = 뒷사람이 고른 묶음(여러 개면 +로 이음). 대각선(진한 칸)이 일치, 나머지가 불일치. 칸을 누르면 아래에 그 단위들이 나옵니다. 묶음이 많으면 적게 나온 것은 '기타'로 묶습니다.</p>
-
-    ${G ? '<p class="note">합친 보기에서는 단위별 최종 코드 표가 없어요. 불일치 행렬 칸을 누르면 단위가 나오고, 번호를 누르면 그 목록의 코딩 화면으로 가요.</p>' : `
-    <h3>단위별 비교와 최종 코드</h3>
-    <div class="bar">
-      <label><input type="checkbox" id="onlyDis" ${CMP.onlyDis ? 'checked' : ''}> 불일치·미입력·합의와 다름만 보기 (${disRows.filter((x) => x.dis || x.agr.length).length}개)</label>
-      <button id="fillMaj">다수결로 빈 최종 코드 채우기 (두 명 이상 고른 코드)</button>
-      <button id="exportFinal">최종 코드 CSV</button>
-      <button id="exportAll">세 명 코딩 CSV</button>
-    </div>
-    <table class="t" id="cmpTable"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th>최종 코드</th><th>최종 소양</th><th class="l">메모</th></tr>
-      ${shown.map(({ u, its, dis, a3, agr }) => {
-        const f = fin[u.id] || {};
-        const memos = coders.map((c) => (items(c)[u.id] || {}).memo).filter(Boolean).map((x, i) => esc(x)).join(' / ');
-        const cc = its.map((it) => `<td><b style="color:${firstColor(it)}">${esc(codeStr(it) || '—')}</b>${litBadges(it)}</td>`).join('');
-        const mj = majCodes(its);
-        return `<tr class="${agr.length ? 'agr' : a3 ? 'all3' : dis ? 'dis' : ''}" data-id="${u.id}"><td><a href="#" data-go="${u.id}">${unitNo(u)}</a></td><td>${esc(where(S.book, u))}</td><td class="l">${agr.length ? `<span class="ruletag" title="${esc(agr.map(([c, r]) => `${c}: ${r.join(', ')}`).join(' / '))}">합의와 다름 · ${esc(agr.map((x) => x[0]).join('·'))}</span>` : ''}${a3 ? '<span class="all3tag">세 명 모두 다름</span>' : ''}${esc(u.summary || u.task)}</td>${cc}
-          <td class="fin">${finChips(u.id, f)}${!codesOf(f).length && mj.length ? `<span class="hint">다수 ${esc(mj.join('·'))}</span>` : ''}</td>
-          <td class="fin">${finLits(u.id, f)}${!litsOf(f).length && majLits(its).length ? `<span class="hint">다수 ${esc(majLits(its).map(litShort).join('·'))}</span>` : ''}</td>
-          <td class="l hint">${memos}</td></tr>`;
-      }).join('')}
-    </table>`}`;
+    <p class="note">그 사람이 다 코딩한 분석 단위 중 해당 요소·칸이 나온 수(괄호는 비율)예요. 한 사람만 유난히 많거나 적으면 기준을 다르게 읽었을 가능성이 커요. κ 해석 기준: Landis & Koch(1977).</p>`;
 
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { CMP.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderCompare(); });
-  B.querySelectorAll('[name=lv]').forEach((el) => el.onchange = () => { CMP.level = el.value; renderCompare(); });
   bindWho(B, () => { renderOverview(); renderCompare(); });
-  if (!G) $('#onlyDis').onchange = (e) => { CMP.onlyDis = e.target.checked; renderCompare(); };
-  // 불일치 행렬
-  const pairIdx = []; for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) pairIdx.push([i, j]);
-  const mxLabel = (it, what) => (what === 'lit' ? litList().filter((l) => litsOf(it).includes(l)).map(litShort) : [...new Set(codesOf(it).map((c) => levelOf(c, what)))].sort()).join('+');
-  const mxData = (pi = CMP.mxPair || 0, what = CMP.mxWhat || 'fine') => {
-    const [i, j] = pairIdx[pi] || [0, 1];
-    const ok = (c, u) => (what === 'lit' ? litsOf(items(c)[u.id]).length : codesOf(items(c)[u.id]).length);
-    const recs = units.filter((u) => ok(coders[i], u) && ok(coders[j], u)).map((u) => ({ u, a: mxLabel(items(coders[i])[u.id], what), b: mxLabel(items(coders[j])[u.id], what) }));
-    const cnt = {}; recs.forEach((r) => { cnt[r.a] = (cnt[r.a] || 0) + 1; cnt[r.b] = (cnt[r.b] || 0) + 1; });
-    const top = Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x]);
-    const keep = top.slice(0, top.length > 12 ? 11 : 12), lab = (x) => (keep.includes(x) ? x : '기타');
-    const labels = [...keep, ...(top.length > 12 ? ['기타'] : [])];
-    recs.forEach((r) => { r.ra = lab(r.a); r.rb = lab(r.b); });
-    return { i, j, labels, recs };
-  };
-  const renderMx = () => {
-    const { i, j, labels, recs } = mxData();
-    const cell = (a, b) => recs.filter((r) => r.ra === a && r.rb === b).length;
-    $('#mxBox').innerHTML = !recs.length ? '<p class="hint">두 사람이 모두 입력한 단위가 없습니다.</p>'
-      : `<div class="ov-wrap"><table class="t mx"><tr><th class="l">${esc(coders[i])} ＼ ${esc(coders[j])}</th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}<th>합계</th></tr>
-        ${labels.map((a) => `<tr><th class="l">${esc(a)}</th>${labels.map((b) => { const v = cell(a, b); return `<td class="${a === b ? 'mx-d' : v ? 'mx-x' : ''}" ${v ? `data-mx="${esc(a)}|${esc(b)}"` : ''}>${v || ''}</td>`; }).join('')}<td>${recs.filter((r) => r.ra === a).length}</td></tr>`).join('')}
-        <tr><th class="l">합계</th>${labels.map((b) => `<td>${recs.filter((r) => r.rb === b).length}</td>`).join('')}<td><b>${recs.length}</b></td></tr></table></div><div id="mxList"></div>`;
-    $('#mxBox').querySelectorAll('[data-mx]').forEach((td) => td.onclick = () => {
-      const [a, b] = td.dataset.mx.split('|');
-      const rs = recs.filter((r) => r.ra === a && r.rb === b);
-      $('#mxList').innerHTML = `<p><b>${esc(coders[i])} ${esc(a)} / ${esc(coders[j])} ${esc(b)}</b> · ${rs.length}개</p><table class="t"><tr><th>#</th><th>위치</th><th class="l">발문 요약</th><th>${esc(coders[i])}</th><th>${esc(coders[j])}</th></tr>
-        ${rs.map((r) => `<tr><td><a href="#" data-go="${r.u.id}" data-gb="${r.u._book || ''}">${r.u._no || unitNo(r.u)}</a></td><td>${G ? esc(bookName(r.u._book)) + ' · ' : ''}${esc(where(r.u._book || S.book, r.u))}</td><td class="l">${esc(r.u.summary || r.u.task)}</td><td>${esc(r.a)}</td><td>${esc(r.b)}</td></tr>`).join('')}</table>`;
-      $('#mxList').querySelectorAll('[data-go]').forEach((x) => x.onclick = async (e) => { e.preventDefault(); if (x.dataset.gb && x.dataset.gb !== S.book) { CMP.group = null; await selectBook(x.dataset.gb); fillHeaderBooks(); } $('#tabs [data-tab=code]').click(); select(x.dataset.go); });
-    });
-  };
-  $('#mxPair').onchange = (e) => { CMP.mxPair = +e.target.value; renderMx(); };
-  $('#mxWhat').onchange = (e) => { CMP.mxWhat = e.target.value; renderMx(); };
-  renderMx();
-  // 일치율 표 CSV: 이 목록의 표를 한 파일에 (표마다 빈 줄로 구분)
+  // 일치율 표: 요소별(단계·소양) → 4×3 칸별 → 코더별 사용 빈도 → 칸이 다른 단위
+  const n3 = (v) => (isNaN(v) ? '' : +v.toFixed(3));
+  const elTab = (t, o, list) => [[t, '붙인 단위(한 명이라도)', '일치율', 'Fleiss κ', 'Krippendorff α'], ...list.map(([k, n]) => { const v = o.per[k]; return v ? [`${k} ${n}`, v.n, n3(v.po), n3(v.k), n3(v.a)] : [`${k} ${n}`, 0, '', '', '']; }), ['평균', '', '', n3(o.k), n3(o.a)]];
+  const stTab = () => elTab('통계적 문제해결 단계', C4.st, [['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']]);
+  const litTab = () => elTab('통계적 소양', C4.lit, [['K', '지식'], ['R', '추론·판단'], ['C', '의사소통']]);
+  const sumTab = () => [['항목', '값'], ['코더', coders.join('·')], ['비교한 분석 단위(모두 다 코딩)', C4.n], ['전체 분석 단위', C4.total], ['단계 묶음 완전 일치', n3(C4.stPo)], ['단계 κ(F·C·A·I 평균)', n3(C4.stK)], ['소양 묶음 완전 일치', n3(C4.litPo)], ['소양 κ(K·R·C 평균)', n3(C4.litK)], ['4×3 완전 일치', n3(C4.po)], ['4×3 칸 κ 평균', n3(C4.k)], ['4×3 칸 α 평균', n3(C4.a)]];
+  const cellTab = () => [['칸', '붙인 단위', 'Fleiss κ', 'Krippendorff α'], ...CELLS12.filter((k) => C4.per[k]).map((k) => [k === 'X' ? '해당 없음' : k, C4.per[k].n, n3(C4.per[k].k), n3(C4.per[k].a)])];
+  const fqTab = () => [['구분', '요소·칸', ...coders.flatMap((c) => [`${c} 수`, `${c} 비율`])], ...freqRows.map((r) => [r.g, r.cat, ...r.v.flatMap((v, i) => [v, n3(v / saved[i].length)])])];
+  const disTab = () => [['목록', '분석 단위', '하위 문항 수', ...coders.flatMap((c) => [`${c} 단계`, `${c} 소양`, `${c} 칸`])], ...C4.dis.map((d) => [bookName(d.g.book), d.title, d.n, ...d.by.flatMap(([, x, st, li]) => [st, li, cellTxt(x)])])];
+  const allTab = () => [['목록', '단위', '과제', '발문 요약', ...coders], ...units.map((u) => [G ? bookName(u._book) : title, u._no || unitNo(u), u.task || '', u.summary || '', ...coders.map((c) => (cOf(c, u) ? cellTxt(cOf(c, u)) : ''))])];
+  const fname = G ? G.name.replace(/\s+/g, '_') : S.book;
   $('#exportStats').onclick = () => {
-    const n3 = (v) => (isNaN(v) ? '' : v.toFixed(3));
-    const out = [[`${title} 일치율`, `비교 수준: ${{ fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level]}`, `포함 유형: ${CMP.kinds.map((k) => KINDS[k]).join('·')}`], []];
-    out.push(['[쌍별·세 명]', '단위 수', '코드 완전 일치율', 'κ(코드별 평균)', '소양 완전 일치율', '소양 κ(요소별 평균)']);
-    pairs.forEach((p) => out.push([p.name, p.code.n, n3(p.code.po), n3(p.code.k), n3(p.lit.po), n3(p.lit.k)]));
-    out.push(['세 명 (Fleiss κ)', fl.n, n3(fl.po), n3(fl.k), n3(flLit.po), n3(flLit.k)], ['세 명 (Krippendorff α)', fl.n, '', n3(fl.a), '', n3(flLit.a)], []);
-    const elHead = (t) => [t, '고른 단위 수', '세 명 단순 일치율', 'Fleiss κ', 'Krippendorff α', ...pairs.flatMap((p) => [`${p.name} 일치율`, `${p.name} Cohen κ`])];
-    [['stage', '[단계별 일치]'], ['fine', '[세부 코드별 일치]']].forEach(([k, t]) => { out.push(elHead(t)); elRows[k].forEach((r) => out.push([r.cat, r.n, n3(r.po), n3(r.k), n3(r.a), ...r.pairs.flatMap((p) => [n3(p.po), n3(p.k)])])); out.push([]); });
-    out.push(elHead('[소양 요소별 일치]'));
-    litList().forEach((e) => out.push([litShort(e), '', n3(flLit.el[e].po), n3(flLit.el[e].k), n3(flLit.el[e].a), ...pairs.flatMap((p) => [n3(p.lit.el[e].po), n3(p.lit.el[e].k)])]));
-    out.push([], ['[코더별 사용 빈도]', '구분', ...coders.flatMap((c) => [`${c} 수`, `${c} 비율`])]);
-    freqRows.forEach((r) => out.push([r.cat, r.g, ...r.v.flatMap((v, i) => [v, n3(v / r.base[i].length)])]));
-    const { i, j, labels, recs } = mxData();
-    out.push([], [`[불일치 행렬] ${coders[i]}(행) × ${coders[j]}(열) · ${{ fine: '세부 코드', stage: '단계', lit: '소양' }[CMP.mxWhat || 'fine']}`, ...labels]);
-    labels.forEach((a) => out.push([a, ...labels.map((b) => recs.filter((r) => r.ra === a && r.rb === b).length)]));
-    download(`${G ? G.name.replace(/\s+/g, '_') : S.book}_일치율.csv`, toCSV(out));
+    const out = [[`${title} 일치율 (4×3 칸 기준)`, `포함 유형: ${CMP.kinds.map((k) => KINDS[k]).join('·')}`], [], ...sumTab(), [], ...stTab(), [], ...litTab(), [], ...cellTab(), [], ...fqTab()];
+    download(`${fname}_일치율.csv`, toCSV(out));
   };
-  // 엑셀: 표마다 시트 하나 + 불일치 행렬(세 쌍 × 세부·단계·소양) + 단위별 세 명 코딩
-  $('#exportXlsx').onclick = () => {
-    const n3 = (v) => (isNaN(v) ? '' : +v.toFixed(3));
-    const info = [['목록', title], ['비교 수준(쌍별 표)', { fine: '세부 코드', basic: '기본 코드', stage: '단계' }[CMP.level]], ['포함 유형', CMP.kinds.map((k) => KINDS[k]).join('·')], ['만든 날', new Date().toLocaleString('ko-KR')],
-      [], ['계산 방법'], ['완전 일치율', '고른 코드(소양) 묶음이 똑같은 단위의 비율. 두 사람(세 사람)이 모두 입력한 단위만 셈'], ['κ', '코드(요소)마다 골랐다/안 골랐다로 Cohen κ(두 명)·Fleiss κ(세 명)를 구해, 누군가 한 번이라도 고른 코드의 κ를 평균'], ['α', 'Krippendorff α(명목). 코드(요소)마다 구해 평균, 빠진 값 허용'], ['κ 해석', 'Landis & Koch(1977): 0.2 이하 낮음, 0.4 약간, 0.6 보통, 0.8 상당한 일치, 그 위 거의 완벽']];
-    const pr = [['쌍', '단위 수', '코드 완전 일치율', 'κ(코드별 평균)', '소양 단위 수', '소양 완전 일치율', '소양 κ(요소별 평균)']];
-    pairs.forEach((p) => pr.push([p.name, p.code.n, n3(p.code.po), n3(p.code.k), p.lit.n, n3(p.lit.po), n3(p.lit.k)]));
-    pr.push(['세 명 (Fleiss κ)', fl.n, n3(fl.po), n3(fl.k), flLit.n, n3(flLit.po), n3(flLit.k)], ['세 명 (Krippendorff α)', fl.n, '', n3(fl.a), flLit.n, '', n3(flLit.a)]);
-    const elHead = (t) => [t, '고른 단위 수', '세 명 단순 일치율', 'Fleiss κ', 'Krippendorff α', ...pairs.flatMap((p) => [`${p.name} 일치율`, `${p.name} Cohen κ`])];
-    const el = (k, t) => [elHead(t), ...elRows[k].map((r) => [r.cat, r.n, n3(r.po), n3(r.k), n3(r.a), ...r.pairs.flatMap((p) => [n3(p.po), n3(p.k)])])];
-    const lit = [elHead('소양 요소'), ...litList().map((e) => [litShort(e), '', n3(flLit.el[e].po), n3(flLit.el[e].k), n3(flLit.el[e].a), ...pairs.flatMap((p) => [n3(p.lit.el[e].po), n3(p.lit.el[e].k)])])];
-    const fq = [['구분', '코드·소양', ...coders.flatMap((c) => [`${c} 수`, `${c} 비율`])], ...freqRows.map((r) => [r.g, r.cat, ...r.v.flatMap((v, i) => [v, n3(v / r.base[i].length)])])];
-    const mx = [];
-    pairIdx.forEach((_, pi) => ['fine', 'stage', 'lit'].forEach((w) => {
-      const { i, j, labels, recs } = mxData(pi, w);
-      mx.push([`${coders[i]}(행) × ${coders[j]}(열) · ${{ fine: '세부 코드', stage: '단계', lit: '소양' }[w]}`, ...labels, '합계']);
-      labels.forEach((a) => mx.push([a, ...labels.map((b) => recs.filter((r) => r.ra === a && r.rb === b).length), recs.filter((r) => r.ra === a).length]));
-      mx.push(['합계', ...labels.map((b) => recs.filter((r) => r.rb === b).length), recs.length], []);
-    }));
-    const finOf = G ? (u) => (OV.cache[u._book] ? OV.cache[u._book].fin[u.id] : null) : (u) => (finalState.data.items || {})[u.id];
-    saveXlsx(`${G ? G.name.replace(/\s+/g, '_') : S.book}_일치율.xlsx`, [['정보', info], ['쌍별 일치', pr], ['단계별 일치', el('stage', '단계')], ['세부 코드별 일치', el('fine', '코드')], ['소양 요소별 일치', lit], ['코더별 사용 빈도', fq], ['불일치 행렬', mx], ['단위별 세 명 코딩', unitSheet(units, items, finOf)]]);
-  };
+  $('#exportXlsx').onclick = () => saveXlsx(`${fname}_일치율.xlsx`, [['요약', sumTab()], ['단계별 일치', stTab()], ['소양별 일치', litTab()], ['4×3 칸별 일치', cellTab()], ['코더별 사용 빈도', fqTab()], ['단계·소양이 다른 분석 단위', disTab()], ['단위별 코더 칸', allTab()]]);
   if (G) return;
   B.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.go); });
-  finalState.data.items ||= {};
-  const setFin = (id, patch) => { finalState.data.items ||= {}; finalState.data.items[id] = { ...(finalState.data.items[id] || {}), ...patch }; scheduleFinal(); };
-  B.querySelectorAll('[data-fc]').forEach((el) => el.onclick = () => {
-    const id = el.dataset.fid, its = coders.map((c) => items(c)[id] || {});
-    const f = (finalState.data.items || {})[id] || {};
-    const set = new Set(codesOf(f)); set.has(el.dataset.fc) ? set.delete(el.dataset.fc) : set.add(el.dataset.fc);
-    const order = codeList().map((c) => c.code); const codes = [...set].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-    const patch = { codes, code: codes[0] || '' };
-    if (!litsOf(f).length) patch.lits = majLits(its); // 처음 정할 때 소양은 다수결로 함께
-    setFin(id, patch);
-    el.classList.toggle('on', codes.includes(el.dataset.fc));
-    el.style.cssText = codes.includes(el.dataset.fc) ? `background:${stageColor(el.dataset.fc)};border-color:${stageColor(el.dataset.fc)}` : '';
-  });
-  B.querySelectorAll('[data-fl]').forEach((el) => el.onclick = () => {
-    const id = el.dataset.fid, v = el.dataset.fl, cur = litsOf((finalState.data.items || {})[id]);
-    let next;
-    if (v === LITX) next = cur.includes(LITX) ? [] : [LITX];
-    else { const set = new Set(cur.filter((x) => x !== LITX)); set.has(v) ? set.delete(v) : set.add(v); next = litList().filter((x) => set.has(x)); }
-    setFin(id, { lits: next });
-    el.parentElement.querySelectorAll('[data-fl]').forEach((b) => b.classList.toggle('on', next.includes(b.dataset.fl)));
-  });
-  $('#fillMaj').onclick = () => {
-    let n = 0;
-    units.forEach((u) => {
-      if (codesOf(fin[u.id]).length) return;
-      const its = coders.map((c) => items(c)[u.id] || {});
-      const mj = majCodes(its);
-      if (!mj.length) return;
-      finalState.data.items[u.id] = {
-        ...(finalState.data.items[u.id] || {}), codes: mj, code: mj[0],
-        lits: majLits(its),
-      };
-      n++;
-    });
-    toast(`${n}개를 다수결로 채웠습니다. 세 명이 모두 다른 단위는 직접 정해 주세요.`);
-    saveFinal().then(renderCompare);
-  };
-  $('#exportFinal').onclick = () => exportCSV(S.book, '최종', fin, `${S.book}_최종코드.csv`);
-  $('#exportAll').onclick = () => {
-    const head = ['교과서ID', '쪽', '위치', '발문', '문제해결 코드', ...LIT_HEAD(), '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID'];
-    const rows = [head];
-    [...coders, '최종'].forEach((c) => {
-      const its = c === '최종' ? fin : items(c);
-      S.units.forEach((u) => { const it = its[u.id] || {}; rows.push([S.book, where(S.book, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), c, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id]); });
-    });
-    download(`${S.book}_세명코딩.csv`, toCSV(rows));
-  };
 }
 function scheduleFinal() { saveState('최종 코드 저장 대기…'); clearTimeout(finalTimer); finalTimer = setTimeout(() => { finalTimer = null; saveFinal(); }, SAVE_DELAY); }
 // 기다리는 저장을 지금 바로 (목록 바꾸기·이름 바꾸기·페이지 떠나기·완료 누르기 전에)
@@ -1859,14 +1690,13 @@ async function renderStats() {
   B.innerHTML = '<p class="hint">불러오는 중…</p>';
 
   // 자료 모으기
-  const recs = [], recs43 = [];
+  const recs43 = [];
   for (const id of ST.books) {
     const m = S.metas[id]; if (!m) continue;
     const units = id === S.book ? S.units : ((await getStore(`books/${id}/units.json`)).data || {}).units || [];
     exportCSV.cache[id] = units;
     let items = {};
-    if (ST.source === 'final') items = ((await getStore(`final/${id}.json`)).data || {}).items || {};
-    else if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
+    if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
     // 분석 단위(11/10 결정): 교육과정은 원래 문장 하나, 교과서는 과제 번호 하나(괄호 앞이 같고 같은 쪽이나 바로 다음 쪽)
     const auOf = auMap(units, isCur(id), id);
     units.forEach((u) => {
@@ -1874,36 +1704,13 @@ async function renderStats() {
       const it = items[u.id];
       const cs = it && Array.isArray(it.cells) ? it.cells.filter(Boolean) : []; // 저장한 4×3 칸만
       if (cs.length) recs43.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it, cells: cs, au: auOf.get(u.id) });
-      if (!it || !codesOf(it).length) return;
-      recs.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it });
     });
   }
   const gname = (r) => ST.group === 'book' ? `${r.book} ${r.publisher}` : ST.group === 'period' ? `${r.period} 개정` : r.publisher;
-  const groups = [...new Set(recs.map(gname))];
-  const cats = categories(ST.level);
-  // 코드가 여러 개인 단위는 같은 범주를 한 번만, 서로 다른 범주는 각각 센다
-  const crecs = [];
-  recs.forEach((r) => { [...new Set(codesOf(r.it).map((c) => levelOf(c, ST.level)))].forEach((k) => crecs.push({ ...r, k, ks: [...new Set(codesOf(r.it).map((c) => levelOf(c, 'stage')))] })); });
-  crecs.forEach((r) => { if (r.k && !cats.includes(r.k)) cats.push(r.k); });
-  const count = (g, c) => crecs.filter((r) => gname(r) === g && r.k === c).length;
-  const gTotal = (g) => crecs.filter((r) => gname(r) === g).length;
-
-  const palette = ['#2456a6', '#c0662b', '#2f7d4f', '#8a4fb3', '#a38a16', '#3b8a9e', '#b3261e', '#555'];
-  const chart = barChart(cats, groups, (g, c) => (gTotal(g) ? count(g, c) / gTotal(g) : 0), palette);
-
-  const tableA = [['구분', ...cats.map((c) => c), '합계']];
-  groups.forEach((g) => tableA.push([g, ...cats.map((c) => count(g, c)), gTotal(g)]));
-  const allRow = ['전체', ...cats.map((c) => crecs.filter((r) => r.k === c).length), crecs.length];
-
-  const stageCats = categories('stage');
-  const ces = S.cfg.contentElements;
-  const ceCount = (ce, c) => recs.filter((r) => unitCE(r.u).includes(ce) && codesOf(r.it).some((x) => levelOf(x, 'stage') === c)).length;
-
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
   B.innerHTML = `<h2>통계표</h2>
     <div class="bar">
-      <div class="grp"><span>자료</span><select id="stSrc">${opt([['final', '최종 코드'], ['mine', `내 코딩 (${esc(S.coder || '이름 미선택')})`]], ST.source)}</select></div>
-      <div class="grp"><span>수준</span><select id="stLv">${opt([['stage', '단계'], ['basic', '기본 코드'], ['fine', '세부 코드']], ST.level)}</select></div>
+      <div class="grp"><span>자료</span><b>내 코딩 (${esc(S.coder || '이름 미선택')})</b> <span class="hint">· 저장한 4×3 칸만 셈</span></div>
       <div class="grp"><span>묶기</span><select id="stGrp">${opt([['book', '교과서별'], ['period', '시기별'], ['publisher', '출판사별']], ST.group)}</select></div>
     </div>
     <div class="bar">
@@ -1911,139 +1718,55 @@ async function renderStats() {
       <div class="grp"><span>포함할 유형</span>${Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${ST.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ')}</div>
     </div>
     ${au43Html(recs43, gname)}
-    ${!recs.length ? `<p class="note">집계할 코드가 없습니다. ${ST.source === 'final' ? '최종 코드는 비교·일치율 화면에서 정합니다. 위에서 자료를 \'내 코딩\'으로 바꾸면 내 코드로 미리 볼 수 있습니다.' : ''}</p>` : `
-    <h3>단계별 비율 (${ST.level === 'stage' ? '단계' : ST.level === 'basic' ? '기본 코드' : '세부 코드'})</h3>
-    <div class="chart">${chart}</div>
-    <h3>빈도표 — 개수 (비율)</h3>
-    <table class="t"><tr>${tableA[0].map((h, i) => `<th class="${i ? '' : 'l'}">${esc(h)}</th>`).join('')}</tr>
-      ${tableA.slice(1).map((r) => `<tr><td class="l">${esc(r[0])}</td>${r.slice(1, -1).map((v) => `<td>${v} <span class="hint">(${pct(v / r[r.length - 1])})</span></td>`).join('')}<td><b>${r[r.length - 1]}</b></td></tr>`).join('')}
-      <tr><td class="l"><b>전체</b></td>${allRow.slice(1, -1).map((v) => `<td><b>${v}</b> <span class="hint">(${pct(v / recs.length)})</span></td>`).join('')}<td><b>${crecs.length}</b></td></tr>
-    </table>
-    <p class="note">한 단위에 서로 다른 범주의 코드가 여러 개면 각각 한 번씩 셉니다(합계 = 코드 수). 단위 수는 ${recs.length}개입니다.</p>
-    <h3>내용 요소 × 단계</h3>
-    <table class="t"><tr><th class="l">내용 요소</th>${stageCats.map((c) => `<th>${esc(c)}</th>`).join('')}<th>합계</th></tr>
-      ${ces.map((ce) => { const row = stageCats.map((c) => ceCount(ce, c)); const s = row.reduce((a, b) => a + b, 0); return s ? `<tr><td class="l">${esc(ce)}</td>${row.map((v) => `<td>${v || ''}</td>`).join('')}<td><b>${s}</b></td></tr>` : ''; }).join('')}
-      <tr><td class="l hint">내용 요소 없음</td>${stageCats.map((c) => `<td>${recs.filter((r) => !unitCE(r.u).length && codesOf(r.it).some((x) => levelOf(x, 'stage') === c)).length || ''}</td>`).join('')}<td>${recs.filter((r) => !unitCE(r.u).length).length}</td></tr>
-    </table>
-    <p class="note">내용 요소는 박스의 발문 요약·성취기준으로 자동으로 정해집니다(박스 정보에서 고칠 수 있음). 여러 개인 단위는 각 요소에 한 번씩 셉니다.</p>
-    <h3>통계적 소양</h3>
-    <p class="note"><b>① 단위 기준</b>: 그 요소를 반영한 단위 수 ÷ 전체 단위 수. 한 단위에 소양이 여러 개일 수 있어 <b>합이 100%를 넘을 수 있습니다.</b></p>
-    <table class="t"><tr><th class="l">구분</th><th>단위 수</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th></tr>
-      ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); return `<tr><td class="l">${esc(g)}</td><td>${rs.length}</td>${litList().map((l) => { const c = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${c} <span class="hint">(${pct(c / rs.length)})</span></td>`; }).join('')}<td>${rs.filter((r) => !litsOf(r.it).length).length}</td></tr>`; }).join('')}
-    </table>
-    <p class="note"><b>② 코드 기준</b>: 각 요소 수 ÷ 전체 소양 코드 수(합 100%).</p>
-    <table class="t"><tr><th class="l">구분</th><th>소양 코드 수</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}</tr>
-      ${groups.map((g) => { const rs = recs.filter((r) => gname(r) === g); const tot = rs.reduce((a, r) => a + litsOf(r.it).length, 0); return `<tr><td class="l">${esc(g)}</td><td>${tot}</td>${litList().map((l) => { const c = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${c} <span class="hint">(${pct(c / tot)})</span></td>`; }).join('')}</tr>`; }).join('')}
-    </table>
-    <h3>통계적 문제해결 × 통계적 소양 (${ST.level === 'stage' ? '단계' : ST.level === 'basic' ? '기본 코드' : '세부 코드'})</h3>
-    <table class="t"><tr><th class="l">문제해결 \ 소양</th>${litList().map((l) => `<th>${esc(litShort(l))}</th>`).join('')}<th>미입력</th><th>합계</th></tr>
-      ${cats.map((c) => { const rs = crecs.filter((r) => r.k === c); if (!rs.length) return ''; return `<tr><td class="l">${esc(c)}</td>${litList().map((l) => { const n = rs.filter((r) => litsOf(r.it).includes(l)).length; return `<td>${n || ''}</td>`; }).join('')}<td>${rs.filter((r) => !litsOf(r.it).length).length || ''}</td><td><b>${rs.length}</b></td></tr>`; }).join('')}
-      <tr><td class="l"><b>합계</b></td>${litList().map((l) => `<td><b>${crecs.filter((r) => litsOf(r.it).includes(l)).length}</b></td>`).join('')}<td><b>${crecs.filter((r) => !litsOf(r.it).length).length}</b></td><td><b>${crecs.length}</b></td></tr>
-    </table>
-    <p class="note">한 단위에 소양이 여러 개면 각 소양 칸에 한 번씩 셉니다(소양 칸의 합이 합계보다 클 수 있음).</p>
-    <p class="note">위 '수준'과 '포함할 유형' 설정을 따릅니다. 교과서·시기를 나눠 보려면 위에서 교과서를 골라 보세요.</p>
-    ${porterHtml(recs)}
-    <div class="bar" style="margin-top:16px"><button id="stCsvA">빈도표 CSV</button><button id="stCsvRec">코딩 기록 CSV (선택한 교과서 전체)</button></div>`}
+    ${recs43.length ? '<div class="bar" style="margin-top:16px"><button id="stCsvRec">코딩 기록 CSV (하위 문항별 4×3 칸)</button></div>' : ''}
   `;
-  $('#stSrc').onchange = (e) => { ST.source = e.target.value; renderStats(); };
-  $('#stLv').onchange = (e) => { ST.level = e.target.value; renderStats(); };
   $('#stGrp').onchange = (e) => { ST.group = e.target.value; renderStats(); };
   B.querySelectorAll('[data-book]').forEach((el) => el.onchange = () => { ST.books = [...B.querySelectorAll('[data-book]:checked')].map((x) => x.dataset.book); renderStats(); });
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
   if ($('#au43Csv')) $('#au43Csv').onclick = au43Csv;
-  if (!recs.length) return;
-  $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
-  $('#stCsvRec').onclick = () => {
-    const rows = [['교과서ID', '쪽', '위치', '발문', '문제해결 코드', ...LIT_HEAD(), '코더', '메모', '유형', '과제번호', '성취기준', '내용요소', '단위ID', '시기', '출판사']];
-    recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id, period, publisher]));
-    download('코딩기록.csv', toCSV(rows));
+  if ($('#stCsvRec')) $('#stCsvRec').onclick = () => {
+    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
+    recs43.forEach(({ book, period, publisher, u, it, cells, au }) => rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '), au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]));
+    download('코딩기록_4x3.csv', toCSV(rows));
   };
 }
 
 // 분석 단위별 4×3 등장 유무 (11/10 결정: 코딩은 쪼갠 단위, 집계는 교육과정 문장·교과서 과제 번호 하나 = 분석 단위 1개, 같은 칸은 한 번만)
 const taskBase = (t) => String(t || '').replace(/\s*[(（①-⑳⑴-⒇].*$/, '').trim(); // 하위 문항 (1)·①·⑴ 앞까지가 큰 과제
 function au43Html(recs43, gname) {
-  if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">4×3 칸을 저장한 단위가 없습니다. ${ST.source === 'final' ? '최종 코드가 아직 없으면 위 \'자료\'를 \'내 코딩\'으로 바꿔 보세요.' : ''}</p>`;
+  if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">4×3 칸을 저장한 단위가 없습니다.</p>`;
   const AU = new Map();
   recs43.forEach((r) => { let a = AU.get(r.au); if (!a) AU.set(r.au, a = { g: gname(r), cells: new Set(), n: 0 }); r.cells.forEach((c) => a.cells.add(c)); a.n++; });
   const aus = [...AU.values()];
+  aus.forEach((a) => { if (a.cells.size > 1) a.cells.delete('X'); }); // 다른 칸이 있으면 '해당 없음'은 빼고 셈
   const groups = [...new Set(aus.map((a) => a.g))];
+  const STN = { F: '문제설정', C: '자료수집', A: '자료분석', I: '결과해석' }, LTN = { K: '지식', R: '추론·판단', C: '의사소통' };
   const ST4 = ['F', 'C', 'A', 'I'], LT3 = ['K', 'R', 'C'], CELLS = ST4.flatMap((r) => LT3.map((c) => r + c));
   const has = (a, f) => [...a.cells].some(f);
   const cnt = (rs, f) => rs.filter((a) => has(a, f)).length;
   const td = (n, t) => `<td>${n} <span class="hint">(${pct(n / t)})</span></td>`;
-  const rowsOf = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td><td class="hint">${rs.reduce((x, a) => x + a.n, 0)}</td>${ST4.map((r) => td(cnt(rs, (c) => c.length === 2 && c[0] === r), rs.length)).join('')}${LT3.map((l) => td(cnt(rs, (c) => c.length === 2 && c[1] === l), rs.length)).join('')}${td(cnt(rs, (c) => c === 'X'), rs.length)}</tr>`;
+  const rowsOf = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td>${ST4.map((r) => td(cnt(rs, (c) => c.length === 2 && c[0] === r), rs.length)).join('')}${LT3.map((l) => td(cnt(rs, (c) => c.length === 2 && c[1] === l), rs.length)).join('')}${td(cnt(rs, (c) => c === 'X'), rs.length)}</tr>`;
   const cellRow = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td>${CELLS.map((k) => { const n = cnt(rs, (c) => c === k); return `<td>${n || ''}${n ? ` <span class="hint">(${pct(n / rs.length)})</span>` : ''}</td>`; }).join('')}</tr>`;
-  const sub = (label, rs) => { const n = rs.length; const f = (pred) => rs.filter((r) => r.cells.some(pred)).length; return `<tr><td class="l">${esc(label)}</td><td>${n}</td>${ST4.map((s) => td(f((c) => c.length === 2 && c[0] === s), n)).join('')}${LT3.map((l) => td(f((c) => c.length === 2 && c[1] === l), n)).join('')}</tr>`; };
   AU43.rows = { groups, aus, CELLS, ST4, LT3, recs43, gname };
   return `<h2>4×3 분석 단위 집계 <span class="hint">(등장 유무)</span></h2>
-    <p class="note">코딩은 하위 문항·문장 조각마다 하고, 여기서는 <b>교육과정은 원래 문장 하나, 교과서는 과제 번호 하나</b>(예: 문제 3의 (1)(2)(3))를 분석 단위 1개로 셉니다. 분석 단위 안에서 그 단계·소양·칸이 한 번이라도 나오면 '있음'(같은 칸이 여러 번 나와도 1번). 괄호 안은 분석 단위 수에 대한 비율이라 합이 100%를 넘을 수 있어요. 4×3 칸을 저장한 단위만 셉니다(자료: ${ST.source === 'final' ? '최종 코드' : esc(S.coder || '')}).</p>
-    <h3>단계·소양 등장</h3>
-    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th><th class="hint">코딩 단위</th>${ST4.map((r) => `<th>${r} 있음</th>`).join('')}${LT3.map((l) => `<th>${l} 있음</th>`).join('')}<th>해당 없음</th></tr>
+    <p class="note">코딩은 하위 문항·문장 조각마다 하고, 여기서는 <b>교육과정은 원래 문장 하나, 교과서는 큰 과제 하나</b>(예: 문제 3의 (1)(2)(3), ①②)를 분석 단위 1개로 셉니다. 분석 단위 안에서 그 단계·소양·칸이 한 번이라도 나오면 '있음'(같은 칸이 여러 번 나와도 1번). 괄호 안은 분석 단위 수에 대한 비율이라 합이 100%를 넘을 수 있어요. 4×3 칸을 저장한 단위만 셉니다(자료: ${esc(S.coder || '')}의 코딩).</p>
+    <h3>단계·소양 등장 <span class="hint">(분석 단위 수, 괄호는 비율)</span></h3>
+    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th>${ST4.map((r) => `<th>${r} ${STN[r]}</th>`).join('')}${LT3.map((l) => `<th>${l} ${LTN[l]}</th>`).join('')}<th>해당 없음</th></tr>
       ${groups.map((g) => rowsOf(g, aus.filter((a) => a.g === g))).join('')}${rowsOf('전체', aus, true)}</table></div>
     <h3>4×3 칸별 등장</h3>
     <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th>${CELLS.map((k) => `<th>${k}</th>`).join('')}</tr>
       ${groups.map((g) => cellRow(g, aus.filter((a) => a.g === g))).join('')}${cellRow('전체', aus, true)}</table></div>
-    <details><summary>참고: 하위 문항(코딩 단위) 기준으로 센 표</summary>
-    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>코딩 단위</th>${ST4.map((r) => `<th>${r} 있음</th>`).join('')}${LT3.map((l) => `<th>${l} 있음</th>`).join('')}</tr>
-      ${groups.map((g) => sub(g, recs43.filter((r) => gname(r) === g))).join('')}${sub('전체', recs43)}</table></div>
-    <p class="note">분석 단위 기준과 경향이 같은지 확인하는 용도예요(출판사마다 하위 문항을 나누는 정도가 달라서).</p></details>
     <div class="bar"><button id="au43Csv">분석 단위 집계 CSV</button></div>`;
 }
 const AU43 = { rows: null };
 function au43Csv() {
   const R = AU43.rows; if (!R) return;
-  const head = ['구분', '분석 단위 수', ...R.ST4.map((r) => r + ' 있음'), ...R.LT3.map((l) => l + ' 있음'), '해당 없음', ...R.CELLS];
+  const head = ['구분', '분석 단위 수', ...R.ST4.map((r) => '단계 ' + r + ' 있음'), ...R.LT3.map((l) => '소양 ' + l + ' 있음'), '해당 없음', ...R.CELLS];
   const line = (g, rs) => [g, rs.length, ...R.ST4.map((r) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[0] === r)).length), ...R.LT3.map((l) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[1] === l)).length), rs.filter((a) => a.cells.has('X')).length, ...R.CELLS.map((k) => rs.filter((a) => a.cells.has(k)).length)];
   download(`4x3_분석단위집계_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
 }
 
 // Porter 정합성 지수: 같은 시기 교육과정 분포(x)와 교과서 분포(y), 1 - Σ|x−y|/2
-function porterHtml(recs) {
-  const lv = ST.level; // 10/20 결정: 교육과정·교과서 모두 2차 코드까지
-  const curBooks = [...new Set(recs.filter((r) => isCur(r.book)).map((r) => r.book))];
-  if (!curBooks.length) return '';
-  const rows = [];
-  curBooks.forEach((cb) => {
-    const period = S.metas[cb].period;
-    const texts = [...new Set(recs.filter((r) => !isCur(r.book) && S.metas[r.book].period === period).map((r) => r.book))];
-    const dist = (book) => { const rs = []; recs.filter((r) => r.book === book).forEach((r) => [...new Set(codesOf(r.it).map((c) => levelOf(c, lv)))].forEach((k) => rs.push(k))); const d = {}; rs.forEach((k) => { d[k] = (d[k] || 0) + 1 / rs.length; }); return d; };
-    const x = dist(cb);
-    texts.forEach((tb) => {
-      const y = dist(tb), keys = new Set([...Object.keys(x), ...Object.keys(y)]);
-      let sum = 0; keys.forEach((k) => { sum += Math.abs((x[k] || 0) - (y[k] || 0)); });
-      rows.push([period, `${tb} ${S.metas[tb].publisher || ''}`, (1 - sum / 2).toFixed(3)]);
-    });
-  });
-  if (!rows.length) return `<h3>Porter 정합성 지수</h3><p class="note">같은 시기의 교과서도 함께 골라야 계산됩니다.</p>`;
-  return `<h3>Porter 정합성 지수 (${lv === 'stage' ? '단계' : '코드'} 수준)</h3>
-    <table class="t"><tr><th>시기</th><th class="l">교과서</th><th>정합성 지수</th></tr>${rows.map((r) => `<tr><td>${esc(r[0])}</td><td class="l">${esc(r[1])}</td><td><b>${r[2]}</b></td></tr>`).join('')}</table>
-    <p class="note">1 − Σ|x−y|/2 (Porter, 2002). x는 교육과정, y는 교과서의 범주별 비율이며 1에 가까울수록 정합적입니다. 위 '수준'에서 단계 또는 코드 수준을 고를 수 있습니다.</p>`;
-}
-function barChart(cats, groups, val, palette) {
-  const W = Math.max(520, cats.length * (groups.length * 18 + 26) + 60), H = 260, L = 44, T = 14, Bm = 40;
-  const ih = H - T - Bm, cw = (W - L - 10) / cats.length, bw = Math.min(26, (cw - 12) / Math.max(1, groups.length));
-  const max = Math.max(0.05, ...cats.flatMap((c) => groups.map((g) => val(g, c))));
-  const top = Math.ceil(max * 10) / 10;
-  let s = `<svg width="${W}" height="${H}" font-size="11" font-family="inherit">`;
-  for (let t = 0; t <= top + 1e-9; t += top / 4) {
-    const y = T + ih - (t / top) * ih;
-    s += `<line x1="${L}" x2="${W - 10}" y1="${y}" y2="${y}" stroke="#e7e4dc"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" fill="#6b6a64">${Math.round(t * 100)}%</text>`;
-  }
-  cats.forEach((c, i) => {
-    const x0 = L + i * cw + (cw - bw * groups.length) / 2;
-    groups.forEach((g, j) => {
-      const v = val(g, c), h = (v / top) * ih;
-      s += `<rect x="${x0 + j * bw}" y="${T + ih - h}" width="${bw - 2}" height="${h}" fill="${palette[j % palette.length]}" rx="2"><title>${esc(g)} · ${esc(c)}: ${(v * 100).toFixed(1)}%</title></rect>`;
-    });
-    s += `<text x="${L + i * cw + cw / 2}" y="${H - Bm + 16}" text-anchor="middle" fill="#1d1d1b">${esc(c)}</text>`;
-  });
-  s += `<line x1="${L}" x2="${W - 10}" y1="${T + ih}" y2="${T + ih}" stroke="#9a978d"/></svg>`;
-  s += `<div class="legend">${groups.map((g, j) => `<span><i style="background:${palette[j % palette.length]}"></i>${esc(g)}</span>`).join('')}</div>`;
-  return s;
-}
-
-// ───────── 설정 화면 ─────────
 function renderSettings() {
   const B = $('#settingsBody');
   const c = S.cfg;
