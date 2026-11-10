@@ -729,8 +729,9 @@ async function renderPage() {
 function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
-  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${codeStr(it) ? ' · ' + codeStr(it) : ''}`;
-  return `${unitNo(u)}${extra || litsOf(it).length ? `<span class="tc">${esc(extra)}${litBadges(it)}</span>` : ''}`;
+  const cs = isCellDone(it) ? it.cells.join(' ') : ''; // 11/11: 박스 번호표에 4×3 칸을 보여 줌(쪽 단위로 훑어 검토)
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${cs ? ' · ' + cs : codeStr(it) ? ' · ' + codeStr(it) : ''}`;
+  return `${unitNo(u)}${extra || litsOf(it).length ? `<span class="tc">${esc(extra)}${cs ? '' : litBadges(it)}</span>` : ''}`;
 }
 
 function renderBoxes() {
