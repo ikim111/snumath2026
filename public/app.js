@@ -1279,6 +1279,20 @@ function majority(vals) {
 
 
 // 일치율 계산: units(분석 단위), items(코더 → 그 코더의 items), coders
+// 11/10: 4×3 칸 기준 일치율. 칸마다 '붙였다/안 붙였다' Fleiss κ·α를 구해 평균(아무도 안 붙인 칸은 뺌), 단계(F·C·A·I)·소양(K·R·C)도 같은 방식
+const CELLS12 = ['FK', 'FR', 'FC', 'CK', 'CR', 'CC', 'AK', 'AR', 'AC', 'IK', 'IR', 'IC', 'X'];
+function cellAgree(units, items, coders) {
+  const cs = (c, u) => { const it = items(c)[u.id]; return it && Array.isArray(it.cells) ? it.cells : null; };
+  const U = units.filter((u) => coders.every((c) => cs(c, u) && cs(c, u).length));
+  const sets = U.map((u) => coders.map((c) => [...cs(c, u)].sort().join('+')));
+  const same = sets.filter((r) => r.every((x) => x === r[0])).length;
+  const stat = (has, cats) => { const per = {}; cats.forEach((k) => { const rows = U.map((u) => coders.map((c) => has(cs(c, u), k))); const any = rows.some((r) => r.some(Boolean)); if (!any) return; per[k] = { k: fleiss(rows).k, a: kalpha(rows), n: rows.filter((r) => r.some(Boolean)).length }; }); const ks = Object.values(per).map((x) => x.k).filter((x) => !isNaN(x)), as = Object.values(per).map((x) => x.a).filter((x) => !isNaN(x)); return { per, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN, a: as.length ? as.reduce((a, b) => a + b, 0) / as.length : NaN }; };
+  const cell = stat((c, k) => c.includes(k), CELLS12);
+  const st = stat((c, k) => c.some((x) => x.length === 2 && x[0] === k), ['F', 'C', 'A', 'I']);
+  const lit = stat((c, k) => c.some((x) => x.length === 2 && x[1] === k), ['K', 'R', 'C']);
+  const dis = U.filter((u, i) => !sets[i].every((x) => x === sets[i][0])).map((u) => ({ u, by: coders.map((c) => [c, [...cs(c, u)]]) }));
+  return { n: U.length, total: units.length, po: U.length ? same / U.length : NaN, k: cell.k, a: cell.a, per: cell.per, stK: st.k, litK: lit.k, dis };
+}
 function agreeStats(units, items, coders) {
   const lv = (code) => levelOf(code, CMP.level);
   const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
@@ -1366,8 +1380,10 @@ async function renderOverview() {
       coders.forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
     });
     const st = units.length ? agreeStats(units, (c) => itemsBy[c], coders) : null;
-    return { open: open.length, all: ids.length, st, fin, tot };
+    const cst = units.length ? cellAgree(units, (c) => itemsBy[c], coders) : null;
+    return { open: open.length, all: ids.length, st, cst, fin, tot };
   };
+  const c43 = (x) => x.cst ? `<td>${x.cst.n}/${x.cst.total}</td><td>${pct(x.cst.po)}</td><td><b>${kfmt(x.cst.k)}</b> <span class="hint">${kappaWord(x.cst.k)}</span></td><td>${kfmt(x.cst.stK)}</td><td>${kfmt(x.cst.litK)}</td>` : `<td colspan="5" class="hint">비교 전</td>`;
   const cells = (x) => x.st ? `<td>${x.st.fl.n}</td><td>${pct(x.st.fl.po)}</td><td>${kfmt(x.st.fl.k)} <span class="hint">${kappaWord(x.st.fl.k)}</span></td><td>${kfmt(x.st.fl.a)}</td><td>${kfmt(x.st.flLit.k)} <span class="hint">${kappaWord(x.st.flLit.k)}</span></td><td>${kfmt(x.st.flLit.a)}</td><td>${x.fin}/${x.tot}</td>`
     : `<td colspan="7" class="hint">비교 전</td>`;
   const done = (id) => { const o = OV.cache[id]; return coders.map((c) => `${c[0]}${o && o.r.status && o.r.status[c] ? '✓' : '·'}`).join(' '); };
@@ -1398,9 +1414,9 @@ async function renderOverview() {
   OV.rows = [...totRows, ...rows];
   box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>${whoBox()}${whoWarn()}
     <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요(합계·'전체' 줄은 합쳐서). 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
-    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>코드 α</th><th>소양 κ (요소별 Fleiss 평균)</th><th>소양 α</th><th>최종 확정</th></tr>
-    ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
-    ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
+    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>4×3 단위<br><span class="hint">모두 칸 저장/전체</span></th><th>4×3 완전 일치</th><th>4×3 칸 κ</th><th>단계 κ</th><th>소양 κ</th><th class="hint">①② 단위</th><th class="hint">①② 완전 일치</th><th class="hint">①② 코드 κ</th><th class="hint">①② 코드 α</th><th class="hint">①② 소양 κ</th><th class="hint">①② 소양 α</th><th>최종 확정</th></tr>
+    ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
+    ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
     </table></div>
     <div class="bar"><button id="exportOvX">엑셀로 받기 (한눈에 보기 + 전체 단위)</button><button id="exportOv">한눈에 보기 CSV</button></div>`;
   bindWho(box, () => { renderOverview(); renderCompare(); });
@@ -1541,6 +1557,7 @@ async function renderCompare() {
   const lvSet = (it) => [...new Set(codesOf(it).map(lv))].sort();
   const sameSet = (a, b) => a.join('|') === b.join('|');
   const { pairs, fl, flLit } = agreeStats(units, items, coders);
+  const C4 = cellAgree(units, items, coders);
   const elRows = { stage: codeElemStats(units, items, coders, 'stage'), fine: codeElemStats(units, items, coders, 'fine') };
   // 코더별 사용 빈도: 그 사람이 코딩한 단위 중 각 코드·소양을 고른 수
   const coded = coders.map((c) => units.filter((u) => codesOf(items(c)[u.id]).length));
@@ -1577,6 +1594,16 @@ async function renderCompare() {
   B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>${whoBox()}${whoWarn()}
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
+    <h4>4×3 칸 기준</h4>
+    <div class="cards">
+      <div class="card"><div class="k">${coders.length}명 4×3 완전 일치</div><div class="v">${pct(C4.po)}</div><div class="hint">모두 칸을 저장한 ${C4.n}개 기준 (전체 ${C4.total}개)</div></div>
+      <div class="card"><div class="k">칸별 Fleiss κ 평균</div><div class="v">${kfmt(C4.k)}</div><div class="hint">${kappaWord(C4.k)} · α ${kfmt(C4.a)}</div></div>
+      <div class="card"><div class="k">단계 κ / 소양 κ</div><div class="v">${kfmt(C4.stK)} / ${kfmt(C4.litK)}</div><div class="hint">F·C·A·I / K·R·C 유무</div></div>
+    </div>
+    <table class="t"><tr><th></th><th>K 지식</th><th>R 추론·판단</th><th>C 의사소통</th></tr>${[['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']].map(([r, n]) => `<tr><th>${n}</th>${['K', 'R', 'C'].map((c) => { const v = C4.per[r + c]; return `<td>${v ? `<b>${kfmt(v.k)}</b> <span class="hint">(${v.n}단위)</span>` : '<span class="hint">—</span>'}</td>`; }).join('')}</tr>`).join('')}<tr><th>해당 없음</th><td colspan="3">${C4.per.X ? `<b>${kfmt(C4.per.X.k)}</b> <span class="hint">(${C4.per.X.n}단위)</span>` : '<span class="hint">—</span>'}</td></tr></table>
+    <p class="note">괄호는 한 명이라도 그 칸을 붙인 단위 수예요. 단위가 적은 칸은 κ가 크게 흔들려요. 아직 칸을 저장하지 않은 사람이 있으면 그 단위는 빠져요.</p>
+    ${C4.dis.length ? `<details ${G ? '' : 'open'}><summary>4×3 칸이 다른 단위 ${C4.dis.length}개</summary><table class="t"><tr><th class="l">단위</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${C4.dis.map((d) => `<tr><td class="l">${G ? '' : `<a href="#" data-go="${d.u.id}">`}#${d.u._no || unitNo(d.u)} ${esc(d.u.task || '')} <span class="hint">${esc(d.u.summary || '')}</span>${G ? '' : '</a>'}</td>${d.by.map(([c, x]) => `<td style="font-family:var(--mono)">${esc(x.sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '))}</td>`).join('')}</tr>`).join('')}</table></details>` : ''}
+    <h4>①② 기준 (예전 코드·소양)</h4>
     <div class="cards">
       <div class="card"><div class="k">세 명 코드 완전 일치</div><div class="v">${pct(fl.po)}</div><div class="hint">세 명 모두 코딩한 ${fl.n}개 기준</div></div>
       <div class="card"><div class="k">Fleiss' κ (코드별 평균)</div><div class="v">${kfmt(fl.k)}</div><div class="hint">${kappaWord(fl.k)}</div></div>
