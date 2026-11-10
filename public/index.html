@@ -61,13 +61,13 @@
         <div id="unitPanel"></div>
         <div class="unit-list-head">
           <b>분석 단위</b> <span id="progress"></span>
-          <label class="mini"><input type="checkbox" id="onlyTodo"> 안 한 것만</label> <label class="mini"><input type="checkbox" id="onlyStar"> ★확인만</label>
+          <label class="mini"><input type="checkbox" id="onlyTodo"> 안 한 것만</label>
         </div>
         <div class="unit-list" id="unitList"></div>
         <div class="panel-foot">
           <button id="doneBtn" class="primary"></button>
           <button id="exportMine">내 코딩 CSV</button>
-          <button id="importCells" title="Claude가 준 코딩 파일(CSV: 단위ID, 4×3 칸)을 내 이름으로 한꺼번에 넣습니다">코딩 가져오기</button><input type="file" id="importFile" accept=".csv,text/csv" hidden>
+          <button id="importCells" title="CSV(목록ID, 단위ID, 4×3 칸)로 내 칸을 한꺼번에 넣습니다">CSV로 넣기</button><input type="file" id="importFile" accept=".csv,text/csv" hidden>
         </div>
       </aside>
     </div>

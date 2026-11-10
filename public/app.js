@@ -334,7 +334,7 @@ const litBadges = (it) => litsOf(it).map(litBadge).join('');
 const isStar = (it) => !!(it && /★/.test(it.memo || ''));
 const cellStr = (it) => (it && Array.isArray(it.cells) && it.cells.length ? it.cells.join(' ') : '');
 const markHtml = (it, empty = '·') => {
-  if (cellStr(it)) return `${isStar(it) ? '<span class="star">★</span>' : ''}<span class="cellmk">${esc(cellStr(it))}</span>`;
+  if (cellStr(it)) return `<span class="cellmk">${esc(cellStr(it))}</span>`;
   const c = codeStr(it), b = litBadges(it);
   return c || b ? `<span style="color:${firstColor(it)}">${esc(c)}</span>${b}` : `<span style="color:var(--muted)">${empty}</span>`;
 };
@@ -733,7 +733,7 @@ function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
   const cs = isCellDone(it) ? it.cells.join(' ') : ''; // 11/11: 박스 번호표에 4×3 칸을 보여 줌(쪽 단위로 훑어 검토)
-  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${cs ? ' · ' + (isStar(it) ? '★ ' : '') + cs : codeStr(it) ? ' · ' + codeStr(it) : ''}`;
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${cs ? ' · ' + cs : codeStr(it) ? ' · ' + codeStr(it) : ''}`;
   return `${unitNo(u)}${extra || litsOf(it).length ? `<span class="tc">${esc(extra)}${cs ? '' : litBadges(it)}</span>` : ''}`;
 }
 
@@ -745,7 +745,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : sel0.includes(u) ? 'sib' : '', isStar(it) ? 'starbox' : '', markCls(u)].join(' ');
+    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : sel0.includes(u) ? 'sib' : '', '', markCls(u)].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -793,7 +793,7 @@ function step(d) {
   i = i < 0 ? 0 : Math.max(0, Math.min(list.length - 1, i + d));
   select(list[i].id);
 }
-const visibleUnits = () => S.units.filter((u) => u.id === S.sel || ((!$('#onlyTodo').checked || (isRequired(u) && !isCellDone(S.mine.items[u.id]))) && (!$('#onlyStar') || !$('#onlyStar').checked || isStar(S.mine.items[u.id]))));
+const visibleUnits = () => S.units.filter((u) => u.id === S.sel || ((!$('#onlyTodo').checked || (isRequired(u) && !isCellDone(S.mine.items[u.id])))));
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
 // 태블릿·폰만 처음부터 터치로 봄(아이패드는 키보드가 붙으면 hover가 있다고 나와서 따로 확인). 터치 화면 노트북은 마우스로 시작
@@ -1014,7 +1014,7 @@ const SAVE_DELAY = 8000; // 자동 저장 간격(ms): 저장소 쓰기 횟수를
 function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(() => { mineTimer = null; saveMine(); }, SAVE_DELAY); }
 
 // 11/6: 내 코딩 전체에서 칸을 직접 고르지 않았고 ①②로 정할 수 있는 단위(바로·추정·없음)의 칸을 한꺼번에 저장. ①② 값은 안 바꿈
-// 11/10: Claude 코딩 + 형준 검토 결과를 내 이름으로 넣기. CSV 열: 목록ID, 단위ID, 4×3 칸(공백으로), 메모
+// 내 코딩을 CSV로 한꺼번에 넣기. CSV 열: 목록ID, 단위ID, 4×3 칸(공백으로), 메모
 async function importCells(file) {
   const rows = parseCSV(await file.text()); const head = rows.shift() || [];
   const ci = (re) => head.findIndex((h) => re.test(h));
@@ -1040,7 +1040,7 @@ async function importCells(file) {
         let cells = x.cells.filter((c) => CELL_ALL.includes(c));
         if (x.cells.includes('제외')) { cells = ['X']; excl++; }
         if (!cells.length) continue;
-        data.items[x.id] = { ...it, cells: CELL_ALL.filter((c) => cells.includes(c)), cellsManual: true, src: 'Claude+검토', memo: x.memo || it.memo || '', t: Date.now() }; n++;
+        data.items[x.id] = { ...it, cells: CELL_ALL.filter((c) => cells.includes(c)), cellsManual: true, memo: x.memo || it.memo || '', t: Date.now() }; n++;
       }
       if (!n) continue;
       const w = await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`, { method: 'PUT', body: JSON.stringify({ data: { ...data, coder: S.coder, updated: Date.now() }, etag: r.etag }) });
@@ -1169,7 +1169,6 @@ function bindCoding() {
   $('#editMode').onchange = (e) => { S.edit = e.target.checked; S.draw = false; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
   $('#addBox').onclick = () => { S.draw = !S.draw; renderPage(); if (S.draw) toast('쪽 이미지에서 끌어서 새 박스를 그리세요'); };
   $('#onlyTodo').onchange = renderList;
-  if ($('#onlyStar')) $('#onlyStar').onchange = renderList;
   $('#importCells').onclick = () => { if (!S.coder) { toast('내 이름을 먼저 고르세요'); return; } $('#importFile').value = ''; $('#importFile').click(); };
   $('#importFile').onchange = (e) => { const f = e.target.files[0]; if (f) importCells(f); };
   $('#doneBtn').onclick = async () => {
