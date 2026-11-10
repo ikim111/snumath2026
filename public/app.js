@@ -633,6 +633,31 @@ function sortUnits() {
   S.units.sort((a, b) => a.page - b.page || col(a) - col(b) || Math.round(a.r[1] * 200) - Math.round(b.r[1] * 200) || a.r[0] - b.r[0] || (a.t || 0) - (b.t || 0));
 }
 const unitNo = (u) => S.units.indexOf(u) + 1;
+// 분석 단위(11/10 결정): 교육과정은 원래 문장 하나, 교과서는 큰 과제 하나(괄호·①·⑴ 앞이 같고 같은 쪽이나 바로 다음 쪽)
+function auMap(units, cur, pre = '') {
+  const last = new Map(), au = new Map(); let gi = 0;
+  [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => {
+    const base = cur ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
+    const pg = u.page || 0, prev = last.get(base);
+    const key = prev && (cur || pg - prev.page <= 1) ? prev.key : `${pre}#${++gi}`;
+    last.set(base, { page: pg, key }); au.set(u.id, key);
+  });
+  return au;
+}
+// 코딩 화면용: 지금 목록의 단위 → 같은 분석 단위 형제들
+function auNow() {
+  const sig = S.book + '|' + S.units.map((u) => u.id + ':' + (u.task || '') + ':' + (u.orig || '') + ':' + u.page).join(',');
+  if (auNow.sig !== sig) {
+    const m = auMap(S.units, isCur()), g = new Map();
+    S.units.forEach((u) => { const k = m.get(u.id); if (!g.has(k)) g.set(k, []); g.get(k).push(u); });
+    auNow.sig = sig; auNow.key = m; auNow.grp = g;
+  }
+  return auNow;
+}
+const sibsOf = (u) => (u ? auNow().grp.get(auNow().key.get(u.id)) || [u] : []);
+const savedCells = (it) => (isCellDone(it) ? it.cells.filter(Boolean) : []);
+const unionCells = (list) => { const set = new Set(list.flatMap((x) => savedCells(S.mine.items[x.id]))); if (set.size > 1) set.delete('X'); return CELL_ALL.filter((c) => set.has(c)); };
+const auTitle = (u) => (isCur() ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || ''));
 const unitById = (id) => S.units.find((u) => u.id === id);
 
 // ───────── 코딩 화면 ─────────
@@ -650,7 +675,8 @@ function renderCur() {
   V.innerHTML = `<div class="cur-head"><b>${esc(bookName(S.book))}</b> <span class="hint">문장을 눌러 코딩 · Shift+클릭으로 여러 개 골라 합치기 · 오른쪽에서 문장 수정·나누기·추가</span></div>` +
     groups.map((g) => `<div class="cgroup"><div class="cstd">${esc(g.std || '(성취기준 없음)')}</div>${g.list.map((u) => {
       const it = S.mine.items[u.id] || {};
-      return `<div class="crow ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${markCls(u)}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${ruleTag(u)}${all3Tag(u)}${disTag(u)}${markHtml(it)}</span></div>`;
+      const sb = sibsOf(u), first = sb.length > 1 && sb[0] === u;
+      return `${first ? `<div class="au-head cur-au"><span>원래 문장 · 조각 ${sb.length}개</span><span class="s">${esc(u.orig || '')}</span><span class="c">${esc(unionCells(sb).join(' ')) || '·'}</span></div>` : ''}<div class="crow ${sb.length > 1 ? 'in-au' : ''} ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${markCls(u)}" data-id="${u.id}"><span class="cno">#${unitNo(u)}</span><span class="kind">${esc(u.task || '')}</span><span class="ctext">${esc(u.summary)}</span><span class="ccode">${ruleTag(u)}${all3Tag(u)}${disTag(u)}${markHtml(it)}</span></div>`;
     }).join('')}</div>`).join('');
   V.onclick = (e) => { const r = e.target.closest('.crow'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
@@ -708,11 +734,12 @@ function boxLabel(u) {
 function renderBoxes() {
   if (isCur()) { $('#boxes').innerHTML = ''; return; }
   const onPage = S.units.filter((u) => u.page === S.page);
+  const sel0 = S.sel ? sibsOf(unitById(S.sel)).filter((x) => x.id !== S.sel) : [];
   const html = onPage.map((u, i) => {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', markCls(u)].join(' ');
+    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : sel0.includes(u) ? 'sib' : '', markCls(u)].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -825,6 +852,9 @@ function renderPanel() {
       <span class="hint">${esc(where(S.book, u))}</span>
       <span class="nav"><button id="uPrev" title="이전 단위 (↑ 키)">↑</button><button id="uNext" title="다음 단위 (↓ 키)">↓</button></span>
     </div>
+    ${(() => { const sb = sibsOf(u); if (sb.length < 2) return ''; const un = unionCells(sb); return `<div class="au-box"><div class="au-h">${isCur() ? '원래 문장' : '큰 과제'} <b>${esc(auTitle(u))}</b> <span class="hint">· ${isCur() ? '조각' : '하위 문항'} ${sb.length}개를 분석할 때 하나로 셈</span></div>
+      ${sb.map((x) => { const c = savedCells(S.mine.items[x.id]); return `<button class="au-row ${x.id === u.id ? 'on' : ''}" data-au="${x.id}"><span class="au-no">#${unitNo(x)}</span><span class="au-s">${esc(isCur() ? x.summary : (x.task || '') + ' ' + (x.summary || ''))}</span><span class="au-c">${c.length ? esc(c.join(' ')) : '<span class="hint">아직</span>'}</span></button>`; }).join('')}
+      <div class="au-sum">과제 합계 <b>${un.length ? esc(un.join(' ')) : '—'}</b> <span class="hint">(분석 단위 집계에 들어가는 값)</span></div></div>`; })()}
     <details class="meta-box" ${S.metaOpen ? 'open' : ''}>
       <summary><span class="summ">${esc(u.summary || u.task || '(요약 없음)')}</span><span class="edit-link">박스 정보 고치기</span></summary>
       <p class="hint" style="margin:6px 0">박스 정보는 세 명이 함께 씁니다. 고치면 모두에게 반영돼요.</p>
@@ -872,6 +902,7 @@ function renderPanel() {
     u.ce = [...ce]; markDirty(u); renderPanel();
   });
   if ($('#goNext')) $('#goNext').onclick = goNextTodo;
+  P.querySelectorAll('[data-au]').forEach((b) => b.onclick = () => select(b.dataset.au));
 
   $('#uPrev').onclick = () => step(-1);
   $('#uNext').onclick = () => step(1);
@@ -941,14 +972,18 @@ function renderList() {
   if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
   const dis = S.others ? req.filter(isDis).length : 0, a3 = S.others ? req.filter((u) => all3Of(u)).length : 0, rul = req.filter((u) => ruleOf(u)).length;
   $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length} · 합의와 다름 ${rul}${S.others ? ` · 세 명 모두 다름 ${a3} · 다름 ${dis}` : ''}` : '';
+  let lastAu = null;
   $('#unitList').innerHTML = list.map((u) => {
     const it = S.mine.items[u.id] || {};
-    return `<div class="row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${markCls(u)}" data-id="${u.id}">
+    const sb = sibsOf(u), ak = auNow().key.get(u.id), head = sb.length > 1 && ak !== lastAu;
+    lastAu = ak;
+    const hh = head ? `<div class="au-head" data-id="${sb[0].id}"><span>${isCur() ? '문장' : '과제'}</span><span class="s">${esc(auTitle(u))} · ${sb.length}개</span><span class="c">${esc(unionCells(sb).join(' ')) || '·'}</span></div>` : '';
+    return hh + `<div class="${sb.length > 1 ? 'in-au ' : ''}row ${u.id === S.sel || S.multi.has(u.id) ? 'sel' : ''} ${isRequired(u) ? '' : 'opt'} ${markCls(u)}" data-id="${u.id}">
       <span>#${unitNo(u)}</span><span>${esc(isCur() ? (u.std || '').replace('9수', '') : (m && m.pages[u.page] ? m.pages[u.page].label + '쪽' : ''))}</span>
       <span class="s">${u.kind && u.kind !== 'main' ? `[${KINDS[u.kind]}] ` : ''}${esc(u.summary || u.task || '(요약 없음)')}</span>
       <span class="c">${ruleTag(u)}${all3Tag(u)}${disTag(u)}${markHtml(it, isRequired(u) ? '·' : '')}</span></div>`;
   }).join('') || '<p class="hint" style="padding:8px">분석 단위가 없습니다.</p>';
-  $('#unitList').onclick = (e) => { const r = e.target.closest('.row'); if (r) pick(r.dataset.id, e.shiftKey); };
+  $('#unitList').onclick = (e) => { const r = e.target.closest('.row, .au-head'); if (r) pick(r.dataset.id, e.shiftKey); };
 }
 
 function renderDone() {
@@ -1286,12 +1321,14 @@ function cellAgree(units, items, coders) {
   const U = units.filter((u) => coders.every((c) => cs(c, u) && cs(c, u).length));
   const sets = U.map((u) => coders.map((c) => [...cs(c, u)].sort().join('+')));
   const same = sets.filter((r) => r.every((x) => x === r[0])).length;
-  const stat = (has, cats) => { const per = {}; cats.forEach((k) => { const rows = U.map((u) => coders.map((c) => has(cs(c, u), k))); const any = rows.some((r) => r.some(Boolean)); if (!any) return; per[k] = { k: fleiss(rows).k, a: kalpha(rows), n: rows.filter((r) => r.some(Boolean)).length }; }); const ks = Object.values(per).map((x) => x.k).filter((x) => !isNaN(x)), as = Object.values(per).map((x) => x.a).filter((x) => !isNaN(x)); return { per, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN, a: as.length ? as.reduce((a, b) => a + b, 0) / as.length : NaN }; };
+  const stat = (has, cats) => { const per = {}; cats.forEach((k) => { const rows = U.map((u) => coders.map((c) => has(cs(c, u), k))); const any = rows.some((r) => r.some(Boolean)); if (!any) return; per[k] = { k: fleiss(rows).k, a: kalpha(rows), n: rows.filter((r) => r.some(Boolean)).length, po: rows.filter((r) => r.every((x) => x === r[0])).length / rows.length }; }); const ks = Object.values(per).map((x) => x.k).filter((x) => !isNaN(x)), as = Object.values(per).map((x) => x.a).filter((x) => !isNaN(x)); return { per, k: ks.length ? ks.reduce((a, b) => a + b, 0) / ks.length : NaN, a: as.length ? as.reduce((a, b) => a + b, 0) / as.length : NaN }; };
   const cell = stat((c, k) => c.includes(k), CELLS12);
   const st = stat((c, k) => c.some((x) => x.length === 2 && x[0] === k), ['F', 'C', 'A', 'I']);
   const lit = stat((c, k) => c.some((x) => x.length === 2 && x[1] === k), ['K', 'R', 'C']);
+  // 단위마다 단계 묶음(F·C·A·I 중 무엇을 붙였나)·소양 묶음(K·R·C)이 모두 같은지
+  const part = (i) => U.map((u) => coders.map((c) => [...new Set(cs(c, u).filter((x) => x.length === 2).map((x) => x[i]))].sort().join('+') || 'X')).filter((r) => r.every((x) => x === r[0])).length / (U.length || NaN);
   const dis = U.filter((u, i) => !sets[i].every((x) => x === sets[i][0])).map((u) => ({ u, by: coders.map((c) => [c, [...cs(c, u)]]) }));
-  return { n: U.length, total: units.length, po: U.length ? same / U.length : NaN, k: cell.k, a: cell.a, per: cell.per, stK: st.k, litK: lit.k, dis };
+  return { n: U.length, total: units.length, po: U.length ? same / U.length : NaN, k: cell.k, a: cell.a, per: cell.per, stK: st.k, litK: lit.k, st, lit, stPo: part(0), litPo: part(1), dis };
 }
 function agreeStats(units, items, coders) {
   const lv = (code) => levelOf(code, CMP.level);
@@ -1383,7 +1420,7 @@ async function renderOverview() {
     const cst = units.length ? cellAgree(units, (c) => itemsBy[c], coders) : null;
     return { open: open.length, all: ids.length, st, cst, fin, tot };
   };
-  const c43 = (x) => x.cst ? `<td>${x.cst.n}/${x.cst.total}</td><td>${pct(x.cst.po)}</td><td><b>${kfmt(x.cst.k)}</b> <span class="hint">${kappaWord(x.cst.k)}</span></td><td>${kfmt(x.cst.stK)}</td><td>${kfmt(x.cst.litK)}</td>` : `<td colspan="5" class="hint">비교 전</td>`;
+  const c43 = (x) => x.cst ? `<td>${x.cst.n}/${x.cst.total}</td><td>${pct(x.cst.stPo)}</td><td><b>${kfmt(x.cst.stK)}</b> <span class="hint">${kappaWord(x.cst.stK)}</span></td><td>${pct(x.cst.litPo)}</td><td><b>${kfmt(x.cst.litK)}</b> <span class="hint">${kappaWord(x.cst.litK)}</span></td><td class="hint">${pct(x.cst.po)}</td><td class="hint">${kfmt(x.cst.k)}</td>` : `<td colspan="7" class="hint">비교 전</td>`;
   const cells = (x) => x.st ? `<td>${x.st.fl.n}</td><td>${pct(x.st.fl.po)}</td><td>${kfmt(x.st.fl.k)} <span class="hint">${kappaWord(x.st.fl.k)}</span></td><td>${kfmt(x.st.fl.a)}</td><td>${kfmt(x.st.flLit.k)} <span class="hint">${kappaWord(x.st.flLit.k)}</span></td><td>${kfmt(x.st.flLit.a)}</td><td>${x.fin}/${x.tot}</td>`
     : `<td colspan="7" class="hint">비교 전</td>`;
   const done = (id) => { const o = OV.cache[id]; return coders.map((c) => `${c[0]}${o && o.r.status && o.r.status[c] ? '✓' : '·'}`).join(' '); };
@@ -1414,7 +1451,7 @@ async function renderOverview() {
   OV.rows = [...totRows, ...rows];
   box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>${whoBox()}${whoWarn()}
     <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요(합계·'전체' 줄은 합쳐서). 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
-    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>4×3 단위<br><span class="hint">모두 칸 저장/전체</span></th><th>4×3 완전 일치</th><th>4×3 칸 κ</th><th>단계 κ</th><th>소양 κ</th><th class="hint">①② 단위</th><th class="hint">①② 완전 일치</th><th class="hint">①② 코드 κ</th><th class="hint">①② 코드 α</th><th class="hint">①② 소양 κ</th><th class="hint">①② 소양 α</th><th>최종 확정</th></tr>
+    <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>4×3 단위<br><span class="hint">모두 칸 저장/전체</span></th><th>문제해결 단계<br>완전 일치</th><th>단계 κ<br><span class="hint">F·C·A·I 평균</span></th><th>통계적 소양<br>완전 일치</th><th>소양 κ<br><span class="hint">K·R·C 평균</span></th><th class="hint">4×3 완전 일치</th><th class="hint">4×3 칸 κ</th><th class="hint">①② 단위</th><th class="hint">①② 완전 일치</th><th class="hint">①② 코드 κ</th><th class="hint">①② 코드 α</th><th class="hint">①② 소양 κ</th><th class="hint">①② 소양 α</th><th>최종 확정</th></tr>
     ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
     ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${c43(x)}${cells(x)}</tr>`).join('')}
     </table></div>
@@ -1594,11 +1631,19 @@ async function renderCompare() {
   B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>${whoBox()}${whoWarn()}
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
-    <h4>4×3 칸 기준</h4>
+    <h4>요소별 일치도</h4>
     <div class="cards">
-      <div class="card"><div class="k">${coders.length}명 4×3 완전 일치</div><div class="v">${pct(C4.po)}</div><div class="hint">모두 칸을 저장한 ${C4.n}개 기준 (전체 ${C4.total}개)</div></div>
+      <div class="card"><div class="k">통계적 문제해결 단계</div><div class="v">${kfmt(C4.stK)}</div><div class="hint">F·C·A·I κ 평균 · 단계 묶음 완전 일치 ${pct(C4.stPo)}</div></div>
+      <div class="card"><div class="k">통계적 소양</div><div class="v">${kfmt(C4.litK)}</div><div class="hint">K·R·C κ 평균 · 소양 묶음 완전 일치 ${pct(C4.litPo)}</div></div>
+      <div class="card"><div class="k">비교한 단위</div><div class="v">${C4.n}</div><div class="hint">모두 4×3 칸을 저장한 단위 (전체 ${C4.total}개)</div></div>
+    </div>
+    ${(() => { const tb = (title, o, list) => `<table class="t"><tr><th class="l">${title}</th><th>붙인 단위<br><span class="hint">한 명이라도</span></th><th>일치율<br><span class="hint">붙였다/안 붙였다</span></th><th>Fleiss κ</th><th>Krippendorff α</th></tr>${list.map(([k, n]) => { const v = o.per[k]; return `<tr><td class="l">${k} ${n}</td>${v ? `<td>${v.n}</td><td>${pct(v.po)}</td><td><b>${kfmt(v.k)}</b> <span class="hint">${kappaWord(v.k)}</span></td><td>${kfmt(v.a)}</td>` : '<td colspan="4" class="hint">아무도 안 붙임</td>'}</tr>`; }).join('')}<tr><td class="l"><b>평균</b></td><td></td><td></td><td><b>${kfmt(o.k)}</b></td><td>${kfmt(o.a)}</td></tr></table>`;
+      return tb('통계적 문제해결 단계', C4.st, [['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']]) + tb('통계적 소양', C4.lit, [['K', '지식'], ['R', '추론·판단'], ['C', '의사소통']]); })()}
+    <p class="note">단위마다 '이 단계(또는 소양)를 붙였는가'를 코더끼리 비교해요. 예: 한 사람은 AK, 다른 사람은 AR이면 단계 A는 일치, 소양 K·R은 불일치예요. 붙인 단위가 적은 요소는 κ가 크게 흔들려요.</p>
+    <h4>참고: 4×3 칸 기준</h4>
+    <div class="cards">
+      <div class="card"><div class="k">${coders.length}명 4×3 완전 일치</div><div class="v">${pct(C4.po)}</div><div class="hint">12칸 조합이 모두 같은 비율</div></div>
       <div class="card"><div class="k">칸별 Fleiss κ 평균</div><div class="v">${kfmt(C4.k)}</div><div class="hint">${kappaWord(C4.k)} · α ${kfmt(C4.a)}</div></div>
-      <div class="card"><div class="k">단계 κ / 소양 κ</div><div class="v">${kfmt(C4.stK)} / ${kfmt(C4.litK)}</div><div class="hint">F·C·A·I / K·R·C 유무</div></div>
     </div>
     <table class="t"><tr><th></th><th>K 지식</th><th>R 추론·판단</th><th>C 의사소통</th></tr>${[['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']].map(([r, n]) => `<tr><th>${n}</th>${['K', 'R', 'C'].map((c) => { const v = C4.per[r + c]; return `<td>${v ? `<b>${kfmt(v.k)}</b> <span class="hint">(${v.n}단위)</span>` : '<span class="hint">—</span>'}</td>`; }).join('')}</tr>`).join('')}<tr><th>해당 없음</th><td colspan="3">${C4.per.X ? `<b>${kfmt(C4.per.X.k)}</b> <span class="hint">(${C4.per.X.n}단위)</span>` : '<span class="hint">—</span>'}</td></tr></table>
     <p class="note">괄호는 한 명이라도 그 칸을 붙인 단위 수예요. 단위가 적은 칸은 κ가 크게 흔들려요. 아직 칸을 저장하지 않은 사람이 있으면 그 단위는 빠져요.</p>
@@ -1823,14 +1868,7 @@ async function renderStats() {
     if (ST.source === 'final') items = ((await getStore(`final/${id}.json`)).data || {}).items || {};
     else if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
     // 분석 단위(11/10 결정): 교육과정은 원래 문장 하나, 교과서는 과제 번호 하나(괄호 앞이 같고 같은 쪽이나 바로 다음 쪽)
-    const last = new Map(), auOf = new Map(); let gi = 0;
-    [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => {
-      const base = isCur(id) ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
-      const pg = u.page || 0, prev = last.get(base);
-      const key = prev && (isCur(id) || pg - prev.page <= 1) ? prev.key : `${id}#${++gi}`;
-      last.set(base, { page: pg, key });
-      auOf.set(u.id, key);
-    });
+    const auOf = auMap(units, isCur(id), id);
     units.forEach((u) => {
       if (!ST.kinds.includes(u.kind || 'main')) return;
       const it = items[u.id];

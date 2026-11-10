@@ -417,3 +417,19 @@ table.cb-t tr.cb-X td.cb-code { border-left-color: var(--X); }
 .cell-grid button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
 .cell-grid button.auto { border: 2px dashed var(--ink); }
 .cell-grid button.cellx { font-weight: 600; }
+
+/* 분석 단위(큰 과제·원래 문장) 묶어 보기 */
+.au-box { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 10px; background: #faf9f5; display: flex; flex-direction: column; gap: 4px; }
+.au-h { font-size: 13px; }
+.au-row { display: grid; grid-template-columns: 34px 1fr auto; gap: 6px; align-items: center; text-align: left; font: inherit; font-size: 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 4px 6px; cursor: pointer; }
+.au-row.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.au-row .au-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.au-row .au-c, .au-sum b { font-family: ui-monospace, Menlo, monospace; }
+.au-sum { font-size: 13px; padding-top: 2px; }
+.au-head { display: grid; grid-template-columns: 30px 1fr auto; gap: 6px; padding: 5px 6px 2px; font-size: 11px; color: var(--muted); cursor: pointer; border-top: 1px dashed var(--line); margin-top: 2px; }
+.au-head .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--fg, #222); }
+.au-head .c { font-family: ui-monospace, Menlo, monospace; }
+.unit-list .row.in-au { margin-left: 10px; border-left: 2px solid var(--line); border-radius: 0 5px 5px 0; }
+.cur-au { padding: 6px 12px 2px; grid-template-columns: 120px 1fr auto; }
+.crow.in-au { border-left: 3px solid var(--accent-soft); }
+.box.sib { border-style: dashed; border-color: var(--accent); }
