@@ -36,10 +36,15 @@ export async function GET(req) {
     const status = Object.fromEntries(list.map((c, i) => [c, !!(files[i].data && files[i].data.done && files[i].data.doneV >= 2)]));
     const fin = await readJSON(`final/${book}.json`);
     const legacy = list.every((c, i) => files[i].data && files[i].data.done); // 예전에 세 명 모두 완료해 이미 열린 비교는 그대로 열어 둠
-    const opened = Object.values(status).every(Boolean) || legacy || !!(fin.data && fin.data.opened);
-    if (!opened) return json({ opened: false, status });
-    const data = Object.fromEntries(list.map((c, i) => [c, files[i].data || { items: {} }]));
-    return json({ opened: true, status, data });
+    const allOpen = Object.values(status).every(Boolean) || legacy || !!(fin.data && fin.data.opened);
+    // 11/10: who=이름,이름 이면 그 사람들(2명 이상)이 모두 완료했을 때 그 사람들 코드만 공개
+    const who = (q.get('who') || '').split(',').filter((c) => list.includes(c));
+    const sub = who.length >= 2 && who.length < list.length ? who : null;
+    const subOpen = !!sub && sub.every((c) => status[c]);
+    if (!allOpen && !subOpen) return json({ opened: false, status });
+    const show = allOpen ? list : sub;
+    const data = Object.fromEntries(show.map((c) => [c, files[list.indexOf(c)].data || { items: {} }]));
+    return json({ opened: true, status, data, who: show });
   }
 
   const coder = q.get('coder');

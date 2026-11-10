@@ -1344,12 +1344,12 @@ function codeElemStats(units, items, coders, level) {
 const OV = { cache: {}, t: 0 };
 async function renderOverview() {
   const box = $('#cmpOv'); if (!box) return;
-  const coders = S.cfg.coders;
+  const coders = cmpWho();
   const fresh = Date.now() - OV.t < 120000;
   if (!fresh) {
     await Promise.all(S.cfg.books.map(async (id) => {
       try {
-        const [u, r, f] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&all=1`), getStore(`final/${id}.json`)]);
+        const [u, r, f] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&all=1${whoQ()}`), getStore(`final/${id}.json`)]);
         OV.cache[id] = { units: (u.data && u.data.units) || [], r, fin: (f.data && f.data.items) || {} };
       } catch {}
     }));
@@ -1396,13 +1396,14 @@ async function renderOverview() {
   OV.groups = {};
   [...totRows, ...rows].forEach((x, i) => { if (x.ids && x.ids.length > 1) OV.groups['g' + i] = { name: x.name.trim(), ids: x.ids }; x.gk = x.ids && x.ids.length > 1 ? 'g' + i : null; });
   OV.rows = [...totRows, ...rows];
-  box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>
+  box.innerHTML = `<h2>비교·일치율 한눈에 보기</h2>${whoBox()}${whoWarn()}
     <p class="note">세 명 모두 '코딩 완료'를 누른(또는 비교를 연) 목록만 계산해요. 교과서 '전체' 줄은 열린 단원을 합친 값이에요. 줄을 누르면 아래에 자세히 나와요(합계·'전체' 줄은 합쳐서). 맨 위 굵은 합계 줄은 보고서용(열린 목록의 단위를 모두 합쳐 다시 계산). α = Krippendorff α(코드·요소마다 구해 평균). 유형·비교 수준은 아래 '자세히'에서 고른 값을 함께 써요.</p>
     <div class="ov-wrap"><table class="t ov"><tr><th class="l">목록</th><th>완료</th><th>단위</th><th>세 명 완전 일치</th><th>코드 Fleiss κ</th><th>코드 α</th><th>소양 κ (요소별 Fleiss 평균)</th><th>소양 α</th><th>최종 확정</th></tr>
     ${totRows.map((x) => `<tr class="ov-tot ${CMP.group && CMP.group.name === x.name.trim() ? 'on' : ''}" data-grp="${x.gk}"><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     ${rows.map((x) => `<tr class="${x.cls} ${CMP.group ? (CMP.group.name === x.name.trim() ? 'on' : '') : x.id === S.book && x.cls === 'ov-sub' || (x.id === S.book && isCur(x.id)) ? 'on' : ''}" ${x.gk ? `data-grp="${x.gk}"` : `data-ov="${esc(x.id)}"`}><td class="l">${esc(x.name)}</td><td>${esc(x.st2)}</td>${cells(x)}</tr>`).join('')}
     </table></div>
     <div class="bar"><button id="exportOvX">엑셀로 받기 (한눈에 보기 + 전체 단위)</button><button id="exportOv">한눈에 보기 CSV</button></div>`;
+  bindWho(box, () => { renderOverview(); renderCompare(); });
   $('#exportOv').onclick = () => exportOverviewCSV();
   $('#exportOvX').onclick = () => exportOverviewXlsx();
   box.querySelectorAll('[data-grp]').forEach((tr) => tr.onclick = () => {
@@ -1450,7 +1451,7 @@ async function saveXlsx(name, sheets) {
 }
 // 단위별 세 명 코딩 시트: u._book·u._no가 있으면 그 목록, 없으면 지금 목록
 function unitSheet(units, itemsOf, finOf) {
-  const coders = S.cfg.coders;
+  const coders = cmpWho();
   const head = ['구분', '시기', '출판사', '목록', '번호', '위치', '유형', '발문 요약', '내용 요소', ...coders.flatMap((c) => [`${c} 코드`, `${c} 소양`]), '코드 세 명 일치', '소양 세 명 일치', '최종 코드', '최종 소양', '메모', '단위ID'];
   const same = (a) => (a.every(Boolean) ? (a.every((v) => v === a[0]) ? '예' : '아니오') : '');
   return [head, ...units.map((u) => {
@@ -1462,18 +1463,32 @@ function unitSheet(units, itemsOf, finOf) {
   })];
 }
 async function exportOverviewXlsx() {
-  const units = [], itemsBy = Object.fromEntries(S.cfg.coders.map((c) => [c, {}])), fin = {};
+  const units = [], itemsBy = Object.fromEntries(cmpWho().map((c) => [c, {}])), fin = {};
   S.cfg.books.forEach((id) => {
     const o = OV.cache[id]; if (!o || !o.r.opened) return;
     o.units.forEach((u, i) => { if (CMP.kinds.includes(u.kind || 'main')) units.push({ ...u, _book: id, _no: i + 1 }); });
-    S.cfg.coders.forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
+    cmpWho().forEach((c) => Object.assign(itemsBy[c], (o.r.data[c] && o.r.data[c].items) || {}));
     Object.assign(fin, o.fin);
   });
   await saveXlsx(`일치율_전체_${new Date().toISOString().slice(0, 10)}.xlsx`, [['한눈에 보기', ovRows(true)], ['전체 단위 세 명 코딩', unitSheet(units, (c) => itemsBy[c], (u) => fin[u.id])]]);
 }
 
 // ───────── 비교 화면 ─────────
-const CMP = { level: 'fine', onlyDis: true, kinds: null };
+const CMP = { level: 'fine', onlyDis: true, kinds: null, who: null };
+// 11/10: 비교할 사람을 골라서(2명 이상) 그 사람들이 모두 완료하면 비교를 엶
+const cmpWho = () => { if (!CMP.who) { try { CMP.who = JSON.parse(localStorage.getItem('cmpWho') || 'null'); } catch {} } const all = S.cfg.coders; const w = (CMP.who || all).filter((c) => all.includes(c)); return w.length >= 2 ? w : all; };
+const whoQ = () => (cmpWho().length < S.cfg.coders.length ? `&who=${encodeURIComponent(cmpWho().join(','))}` : '');
+const whoBox = () => `<div class="bar who-box"><span>비교할 사람</span>${S.cfg.coders.map((c) => `<label><input type="checkbox" data-cmpwho="${esc(c)}" ${cmpWho().includes(c) ? 'checked' : ''}> ${esc(c)}</label>`).join(' ')}<span class="hint">2명 이상 · 체크한 사람이 모두 '코딩 완료'를 누르면 열려요</span></div>`;
+const whoWarn = () => { const out = S.cfg.coders.filter((c) => !cmpWho().includes(c)); return out.length ? `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px"><b>${esc(cmpWho().join('·'))} ${cmpWho().length}인 비교</b>예요. ${esc(out.join('·'))}님은 이 목록을 아직 코딩하지 않았다면 코딩을 마칠 때까지 이 화면을 보지 마세요(독립 코딩 유지). 보고서에는 이 목록을 ${cmpWho().length}인 비교로 적어요.</p>` : ''; };
+function bindWho(root, after) {
+  root.querySelectorAll('[data-cmpwho]').forEach((el) => el.onchange = () => {
+    const w = [...root.querySelectorAll('[data-cmpwho]:checked')].map((x) => x.dataset.cmpwho);
+    if (w.length < 2) { el.checked = true; toast('2명 이상 골라 주세요'); return; }
+    CMP.who = w; try { localStorage.setItem('cmpWho', JSON.stringify(w)); } catch {}
+    CMP.mxPair = 0;
+    OV.t = 0; after();
+  });
+}
 let finalState = { data: null, etag: null }, finalTimer = null;
 
 async function renderCompare() {
@@ -1494,19 +1509,20 @@ async function renderCompare() {
     open.forEach((id) => {
       const o = OV.cache[id];
       o.units.forEach((u, i) => { if (CMP.kinds.includes(u.kind || 'main')) gUnits.push({ ...u, _book: id, _no: i + 1 }); });
-      S.cfg.coders.forEach((c) => { r.data[c] ||= { items: {} }; Object.assign(r.data[c].items, (o.r.data[c] && o.r.data[c].items) || {}); });
+      cmpWho().forEach((c) => { r.data[c] ||= { items: {} }; Object.assign(r.data[c].items, (o.r.data[c] && o.r.data[c].items) || {}); });
     });
     G.open = open.length;
-  } else [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1`), getStore(`final/${S.book}.json`)]);
+  } else [r, finRes] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(S.book)}&all=1${whoQ()}`), getStore(`final/${S.book}.json`)]);
   finalState = { data: finRes.data || { opened: false, items: {} }, etag: finRes.etag };
-  const coders = S.cfg.coders;
+  const coders = cmpWho();
   const title = G ? `${G.name} (목록 ${G.open}개 합침)` : bookName(S.book);
   const statusHtml = G ? '<span class="hint">합친 보기 · 위 표에서 다른 줄을 누르면 바뀜</span>' : coders.map((c) => `<span class="kind ${r.status[c] ? 'main' : ''}">${esc(c)} ${r.status[c] ? '완료' : '진행 중'}</span>`).join(' ');
 
   if (!r.opened) {
     B.innerHTML = `<h3 class="det-h">${esc(bookName(S.book))} 자세히</h3>
+      ${whoBox()}
       <p>${statusHtml}</p>
-      <p class="note">세 명 모두 '코딩 완료'를 누르면 이 화면이 열립니다. 그 전에는 서로의 코드를 볼 수 없습니다.</p>
+      <p class="note">체크한 사람(${esc(coders.join('·'))})이 모두 '코딩 완료'를 누르면 이 화면이 열립니다. 그 전에는 서로의 코드를 볼 수 없습니다.</p>
       <button id="forceOpen">지금 비교 열기</button> <span class="hint">완료하지 않은 사람이 있어도 엽니다. 연 뒤에는 되돌릴 수 없습니다.</span>`;
     $('#forceOpen').onclick = async () => {
       if (!confirm('비교를 열면 세 명 모두 서로의 코드를 보게 됩니다. 열까요?')) return;
@@ -1515,6 +1531,7 @@ async function renderCompare() {
       if (!w.ok) return toast('저장 충돌 — 다시 시도하세요');
       renderCompare();
     };
+    bindWho(B, () => { renderOverview(); renderCompare(); });
     return;
   }
 
@@ -1557,7 +1574,7 @@ async function renderCompare() {
   const m = S.metas[S.book];
   const finDone = units.filter((u) => codesOf(fin[u.id]).length).length;
 
-  B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>
+  B.innerHTML = `<h3 class="det-h">${esc(title)} 자세히</h3>${whoBox()}${whoWarn()}
     <p>${statusHtml}</p>
     <div class="bar"><div class="grp"><span>포함할 유형</span>${kindBoxes}</div><div class="grp"><span>비교 수준</span>${levelRadios}</div><button id="exportXlsx">엑셀로 받기</button><button id="exportStats">일치율 표 CSV</button></div>
     <div class="cards">
@@ -1616,6 +1633,7 @@ async function renderCompare() {
 
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { CMP.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderCompare(); });
   B.querySelectorAll('[name=lv]').forEach((el) => el.onchange = () => { CMP.level = el.value; renderCompare(); });
+  bindWho(B, () => { renderOverview(); renderCompare(); });
   if (!G) $('#onlyDis').onchange = (e) => { CMP.onlyDis = e.target.checked; renderCompare(); };
   // 불일치 행렬
   const pairIdx = []; for (let i = 0; i < coders.length; i++) for (let j = i + 1; j < coders.length; j++) pairIdx.push([i, j]);
