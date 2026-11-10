@@ -440,7 +440,7 @@ function bookLabel(id) {
   const name = isCur(id) ? bookName(id) : `${pub ? `[${pub}] ` : ''}${m.period || ''} ${m.title || id}`.trim();
   // 내 것만: 완료 누르면 '✓ 완료', 아니면 (한 개수/전체)
   const fin = pg && pg.by && pg.by[S.coder] && pg.by[S.coder].fin;
-  return name + (pg && pg.total ? (fin && pg.done >= pg.total ? '  ✓ 완료' : fin ? `  ✓ 완료 · 4×3 ${pg.done}/${pg.total}` : `  (${pg.done}/${pg.total})`) : '');
+  return name + (pg && pg.total ? (fin ? '  ✓ 완료' : `  (${pg.done}/${pg.total})`) : '');
 }
 function updateBookOption(id) { const o = document.querySelector(`#bookSel option[value="${CSS.escape(id)}"]`); if (o) o.textContent = bookLabel(id); }
 // 목록마다 내 진행률을 뒤에서 조용히 불러옴
@@ -850,7 +850,7 @@ function renderPanel() {
       </div>
     </details>
     ${!canCode ? '<p class="hint" style="color:var(--bad)">위에서 내 이름을 먼저 고르세요.</p>' : `
-    ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 ①② 코드는 바꿀 수 없어요. 4×3 칸은 그대로 고칠 수 있어요. ①②를 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
+    ${S.mine.done ? `<p class="lock-note">✓ 완료한 목록이라 코드를 바꿀 수 없어요. 고치려면 오른쪽 아래 '완료 취소'를 누르세요.</p>` : ''}
     <div class="${S.mine.done ? 'locked' : ''}">
     ${ruleWhy ? `<div class="rulebox">조 합의와 다름: ${esc(ruleWhy.join(' · '))}</div>` : ''}${all3Of(u) ? `<div class="all3box">세 명이 모두 다르게 고름(${esc(all3Of(u).join('·'))}) · 회의에서 정할 단위</div>` : ''}
     ${(() => { const cv = cellsOf(it); return `<div class="step"><span class="stepn ${cv.src === '저장' || cv.src === '자동' ? 'ok' : ''}">${cv.src === '저장' || cv.src === '자동' ? '✓' : '⊞'}</span>4×3 칸 <span class="opt">시험</span><span class="hint step-hint">여러 개 가능 · 아래 ①②를 고르면 자동으로 채워져요</span></div>
@@ -955,7 +955,7 @@ function renderDone() {
   const b = $('#doneBtn');
   b.disabled = !S.coder || !S.book;
   const left = S.units.filter((u) => isRequired(u) && !isCellDone(S.mine.items[u.id])).length;
-  b.textContent = S.mine.done ? (left ? `✓ 완료함 · 4×3 칸 ${left}개 남음 · 누르면 완료 취소` : '✓ 완료함 · 누르면 완료 취소') : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
+  b.textContent = S.mine.done ? '✓ 완료함 · 누르면 완료 취소' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
   b.classList.toggle('ready', !S.mine.done && !left && S.units.length > 0);
   b.classList.toggle('done', !!S.mine.done);
 }
@@ -963,8 +963,7 @@ function renderDone() {
 // ───────── 내 코딩 저장 ─────────
 let mineTimer = null;
 function setItem(id, patch, rerender = true) {
-  const cellOnly = Object.keys(patch).every((k) => k === 'cells' || k === 'cellsManual'); // 11/10: 완료한 목록도 4×3 칸은 고칠 수 있음
-  if (S.mine.done && !cellOnly) { toast("완료한 목록이에요. ①②를 고치려면 오른쪽 아래 '완료 취소'를 먼저 누르세요(4×3 칸은 그냥 고칠 수 있어요)."); return; }
+  if (S.mine.done) { toast("완료한 목록이에요. 고치려면 오른쪽 아래 '완료 취소'를 먼저 누르세요."); return; }
   const cur = S.mine.items[id] || {};
   S.mine.items[id] = { ...cur, ...patch, t: Date.now() };
   scheduleMine();
