@@ -1769,7 +1769,7 @@ async function renderStats() {
   B.innerHTML = '<p class="hint">불러오는 중…</p>';
 
   // 자료 모으기
-  const recs = [];
+  const recs = [], recs43 = [];
   for (const id of ST.books) {
     const m = S.metas[id]; if (!m) continue;
     const units = id === S.book ? S.units : ((await getStore(`books/${id}/units.json`)).data || {}).units || [];
@@ -1777,9 +1777,21 @@ async function renderStats() {
     let items = {};
     if (ST.source === 'final') items = ((await getStore(`final/${id}.json`)).data || {}).items || {};
     else if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
+    // 분석 단위(11/10 결정): 교육과정은 원래 문장 하나, 교과서는 과제 번호 하나(괄호 앞이 같고 같은 쪽이나 바로 다음 쪽)
+    const last = new Map(), auOf = new Map(); let gi = 0;
+    [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => {
+      const base = isCur(id) ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
+      const pg = u.page || 0, prev = last.get(base);
+      const key = prev && (isCur(id) || pg - prev.page <= 1) ? prev.key : `${id}#${++gi}`;
+      last.set(base, { page: pg, key });
+      auOf.set(u.id, key);
+    });
     units.forEach((u) => {
       if (!ST.kinds.includes(u.kind || 'main')) return;
-      const it = items[u.id]; if (!it || !codesOf(it).length) return;
+      const it = items[u.id];
+      const cs = it && Array.isArray(it.cells) ? it.cells.filter(Boolean) : []; // 저장한 4×3 칸만
+      if (cs.length) recs43.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it, cells: cs, au: auOf.get(u.id) });
+      if (!it || !codesOf(it).length) return;
       recs.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it });
     });
   }
@@ -1815,6 +1827,7 @@ async function renderStats() {
       <div class="grp"><span>교과서</span>${S.cfg.books.map((id) => `<label><input type="checkbox" data-book="${esc(id)}" ${ST.books.includes(id) ? 'checked' : ''}> ${esc(id)} ${esc((S.metas[id] || {}).publisher || '')}</label>`).join(' ')}</div>
       <div class="grp"><span>포함할 유형</span>${Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${ST.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ')}</div>
     </div>
+    ${au43Html(recs43, gname)}
     ${!recs.length ? `<p class="note">집계할 코드가 없습니다. ${ST.source === 'final' ? '최종 코드는 비교·일치율 화면에서 정합니다. 위에서 자료를 \'내 코딩\'으로 바꾸면 내 코드로 미리 볼 수 있습니다.' : ''}</p>` : `
     <h3>단계별 비율 (${ST.level === 'stage' ? '단계' : ST.level === 'basic' ? '기본 코드' : '세부 코드'})</h3>
     <div class="chart">${chart}</div>
@@ -1854,6 +1867,7 @@ async function renderStats() {
   $('#stGrp').onchange = (e) => { ST.group = e.target.value; renderStats(); };
   B.querySelectorAll('[data-book]').forEach((el) => el.onchange = () => { ST.books = [...B.querySelectorAll('[data-book]:checked')].map((x) => x.dataset.book); renderStats(); });
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
+  if ($('#au43Csv')) $('#au43Csv').onclick = au43Csv;
   if (!recs.length) return;
   $('#stCsvA').onclick = () => download('빈도표.csv', toCSV([...tableA, allRow]));
   $('#stCsvRec').onclick = () => {
@@ -1861,6 +1875,44 @@ async function renderStats() {
     recs.forEach(({ book, period, publisher, u, it }) => rows.push([book, where(book, u), u.pos, u.summary, codesOf(it).join(';'), ...litCols(it), ST.source === 'final' ? '최종' : S.coder, it.memo, KINDS[u.kind || 'main'], u.task, u.std, unitCE(u).join(';'), u.id, period, publisher]));
     download('코딩기록.csv', toCSV(rows));
   };
+}
+
+// 분석 단위별 4×3 등장 유무 (11/10 결정: 코딩은 쪼갠 단위, 집계는 교육과정 문장·교과서 과제 번호 하나 = 분석 단위 1개, 같은 칸은 한 번만)
+const taskBase = (t) => String(t || '').replace(/\s*[(（].*$/, '').trim();
+function au43Html(recs43, gname) {
+  if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">4×3 칸을 저장한 단위가 없습니다. ${ST.source === 'final' ? '최종 코드가 아직 없으면 위 \'자료\'를 \'내 코딩\'으로 바꿔 보세요.' : ''}</p>`;
+  const AU = new Map();
+  recs43.forEach((r) => { let a = AU.get(r.au); if (!a) AU.set(r.au, a = { g: gname(r), cells: new Set(), n: 0 }); r.cells.forEach((c) => a.cells.add(c)); a.n++; });
+  const aus = [...AU.values()];
+  const groups = [...new Set(aus.map((a) => a.g))];
+  const ST4 = ['F', 'C', 'A', 'I'], LT3 = ['K', 'R', 'C'], CELLS = ST4.flatMap((r) => LT3.map((c) => r + c));
+  const has = (a, f) => [...a.cells].some(f);
+  const cnt = (rs, f) => rs.filter((a) => has(a, f)).length;
+  const td = (n, t) => `<td>${n} <span class="hint">(${pct(n / t)})</span></td>`;
+  const rowsOf = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td><td class="hint">${rs.reduce((x, a) => x + a.n, 0)}</td>${ST4.map((r) => td(cnt(rs, (c) => c.length === 2 && c[0] === r), rs.length)).join('')}${LT3.map((l) => td(cnt(rs, (c) => c.length === 2 && c[1] === l), rs.length)).join('')}${td(cnt(rs, (c) => c === 'X'), rs.length)}</tr>`;
+  const cellRow = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td>${CELLS.map((k) => { const n = cnt(rs, (c) => c === k); return `<td>${n || ''}${n ? ` <span class="hint">(${pct(n / rs.length)})</span>` : ''}</td>`; }).join('')}</tr>`;
+  const sub = (label, rs) => { const n = rs.length; const f = (pred) => rs.filter((r) => r.cells.some(pred)).length; return `<tr><td class="l">${esc(label)}</td><td>${n}</td>${ST4.map((s) => td(f((c) => c.length === 2 && c[0] === s), n)).join('')}${LT3.map((l) => td(f((c) => c.length === 2 && c[1] === l), n)).join('')}</tr>`; };
+  AU43.rows = { groups, aus, CELLS, ST4, LT3, recs43, gname };
+  return `<h2>4×3 분석 단위 집계 <span class="hint">(등장 유무)</span></h2>
+    <p class="note">코딩은 하위 문항·문장 조각마다 하고, 여기서는 <b>교육과정은 원래 문장 하나, 교과서는 과제 번호 하나</b>(예: 문제 3의 (1)(2)(3))를 분석 단위 1개로 셉니다. 분석 단위 안에서 그 단계·소양·칸이 한 번이라도 나오면 '있음'(같은 칸이 여러 번 나와도 1번). 괄호 안은 분석 단위 수에 대한 비율이라 합이 100%를 넘을 수 있어요. 4×3 칸을 저장한 단위만 셉니다(자료: ${ST.source === 'final' ? '최종 코드' : esc(S.coder || '')}).</p>
+    <h3>단계·소양 등장</h3>
+    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th><th class="hint">코딩 단위</th>${ST4.map((r) => `<th>${r} 있음</th>`).join('')}${LT3.map((l) => `<th>${l} 있음</th>`).join('')}<th>해당 없음</th></tr>
+      ${groups.map((g) => rowsOf(g, aus.filter((a) => a.g === g))).join('')}${rowsOf('전체', aus, true)}</table></div>
+    <h3>4×3 칸별 등장</h3>
+    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th>${CELLS.map((k) => `<th>${k}</th>`).join('')}</tr>
+      ${groups.map((g) => cellRow(g, aus.filter((a) => a.g === g))).join('')}${cellRow('전체', aus, true)}</table></div>
+    <details><summary>참고: 하위 문항(코딩 단위) 기준으로 센 표</summary>
+    <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>코딩 단위</th>${ST4.map((r) => `<th>${r} 있음</th>`).join('')}${LT3.map((l) => `<th>${l} 있음</th>`).join('')}</tr>
+      ${groups.map((g) => sub(g, recs43.filter((r) => gname(r) === g))).join('')}${sub('전체', recs43)}</table></div>
+    <p class="note">분석 단위 기준과 경향이 같은지 확인하는 용도예요(출판사마다 하위 문항을 나누는 정도가 달라서).</p></details>
+    <div class="bar"><button id="au43Csv">분석 단위 집계 CSV</button></div>`;
+}
+const AU43 = { rows: null };
+function au43Csv() {
+  const R = AU43.rows; if (!R) return;
+  const head = ['구분', '분석 단위 수', ...R.ST4.map((r) => r + ' 있음'), ...R.LT3.map((l) => l + ' 있음'), '해당 없음', ...R.CELLS];
+  const line = (g, rs) => [g, rs.length, ...R.ST4.map((r) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[0] === r)).length), ...R.LT3.map((l) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[1] === l)).length), rs.filter((a) => a.cells.has('X')).length, ...R.CELLS.map((k) => rs.filter((a) => a.cells.has(k)).length)];
+  download(`4x3_분석단위집계_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
 }
 
 // Porter 정합성 지수: 같은 시기 교육과정 분포(x)와 교과서 분포(y), 1 - Σ|x−y|/2
