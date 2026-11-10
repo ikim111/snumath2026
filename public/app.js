@@ -1497,14 +1497,36 @@ function mini43(cells, diff) {
   return `<table class="mini43"><tr><th></th>${COLS3.map(([c]) => `<th>${c}</th>`).join('')}</tr>${ROWS4.map(([r]) => `<tr><th>${r}</th>${COLS3.map(([c]) => { const k = r + c; return `<td class="${on.has(k) ? 'on' : ''} ${diff && diff.has(k) ? 'df' : ''}">${on.has(k) ? '●' : ''}</td>`; }).join('')}</tr>`).join('')}</table>${on.has('X') && on.size === 1 ? '<div class="hint">해당 없음</div>' : ''}`;
 }
 const stLit = (cells) => { if (!cells) return ''; const st = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[0]))], li = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[1]))]; const o = (a, ref) => ref.map(([k]) => k).filter((k) => a.includes(k)).join('·') || 'X'; return `${o(st, ROWS4)} / ${o(li, COLS3)}`; };
+// 최종 4×3(분석 단위별): final/<목록>_43.json  { au: { 첫 단위 id: { ids, cells, memo, by, t } } }
+const FIN43 = { book: null, data: { au: {} }, etag: null };
+async function saveFin43(retry = true) {
+  saveState('최종 저장 중…');
+  const r = await putStore(`final/${FIN43.book}_43.json`, FIN43.data, FIN43.etag);
+  if (r.ok) { FIN43.etag = r.etag; saveState('최종 저장됨'); return; }
+  if (retry && r.current && r.current.data) { // 다른 사람이 먼저 저장: 과제마다 나중 것을 남김
+    const o = r.current.data.au || {}, m = { ...o };
+    Object.entries(FIN43.data.au).forEach(([k, v]) => { if (!o[k] || (v.t || 0) >= (o[k].t || 0)) m[k] = v; });
+    const del = { ...(r.current.data.del || {}), ...(FIN43.data.del || {}) };
+    Object.entries(del).forEach(([k, t]) => { if (m[k] && (m[k].t || 0) < t) delete m[k]; });
+    FIN43.data = { ...r.current.data, au: m, del }; FIN43.etag = r.current.etag; return saveFin43(false);
+  }
+  saveState('최종 저장 실패 — 다시 눌러 주세요', true);
+}
+function fin43(key, fin, maj) {
+  const cells = fin ? fin.cells || [] : maj || [], on = new Set(cells), sug = !fin;
+  return `<div data-fk="${esc(key)}"><table class="mini43 fin ${sug ? 'sug' : ''}"><tr><th></th>${COLS3.map(([c]) => `<th>${c}</th>`).join('')}</tr>${ROWS4.map(([r]) => `<tr><th>${r}</th>${COLS3.map(([c]) => { const k = r + c; return `<td class="${on.has(k) ? 'on' : ''}"><button data-f43="${k}" title="${k}">${on.has(k) ? '●' : ''}</button></td>`; }).join('')}</tr>`).join('')}<tr><td colspan="4"><button data-f43="X" class="fx ${on.has('X') ? 'on' : ''}">해당 없음</button></td></tr></table>
+    <div class="rs-sl">${cells.length ? esc(stLit(cells)) : ''}</div>
+    ${sug ? (maj && maj.length ? '<div class="hint">다수결 제안 <button data-f43ok="1">이대로 확정</button></div>' : '<div class="hint">칸을 눌러 정하기</div>') : `<div class="hint">✓ 확정${fin.by ? ' · ' + esc(fin.by) : ''} <button data-f43del="1" title="최종 지우기">지우기</button></div>`}</div>`;
+}
 async function renderResults() {
   const B = $('#resultsBody');
   if (!S.book) { B.innerHTML = '<p class="hint">위에서 목록을 고르세요.</p>'; return; }
   B.innerHTML = '<p class="hint">불러오는 중…</p>';
   const ORD = ['이성식', '조상연', '김형준'];
   const book = S.book, coders = [...S.cfg.coders].sort((x, y) => (ORD.indexOf(x) + 1 || 99) - (ORD.indexOf(y) + 1 || 99));
-  let r = null; try { r = await api(`/api/codings?book=${encodeURIComponent(book)}&all=1${whoQ()}`); } catch {}
+  let r = null, F = null; try { [r, F] = await Promise.all([api(`/api/codings?book=${encodeURIComponent(book)}&all=1${whoQ()}`), getStore(`final/${book}_43.json`)]); } catch {}
   if (book !== S.book) return;
+  FIN43.book = book; FIN43.data = (F && F.data) || { au: {} }; FIN43.data.au ||= {}; FIN43.etag = F && F.etag;
   const opened = !!(r && r.opened);
   const itemsOf = (c) => (opened && r.data && r.data[c] ? r.data[c].items || {} : c === S.coder ? S.mine.items : null);
   const kinds = S.cfg.defaultKinds || ['main', 'intro'];
@@ -1517,22 +1539,44 @@ async function renderResults() {
     const by = coders.map((c) => merged(c, g));
     const full = by.filter((x) => x && x.done === x.all);
     const diff = new Set(); if (full.length >= 2) CELL_ALL.forEach((k) => { const n = full.filter((x) => x.cells.includes(k)).length; if (n && n < full.length) diff.add(k); });
-    return { g, by, diff, dis: diff.size > 0 };
+    // 다수결 제안: 다 코딩한 사람의 절반 넘게 고른 칸
+    const maj = full.length >= 2 ? CELL_ALL.filter((k) => full.filter((x) => x.cells.includes(k)).length * 2 > full.length) : [];
+    return { g, by, diff, dis: diff.size > 0, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj, fin: FIN43.data.au[g.list[0].id] };
   });
-  const shown = RS.onlyDis ? rows.filter((x) => x.dis) : rows;
+  const shown = RS.onlyDis ? rows.filter((x) => x.dis) : RS.onlyTodo ? rows.filter((x) => !x.fin) : rows;
+  const nFin = rows.filter((x) => x.fin).length;
   if (!rows.some((x) => x.g.key === RS.sel)) { RS.sel = rows.length ? rows[0].g.key : null; RS.pg = 0; }
   const m = S.metas[book] || {};
   const title = (g) => { const u = g.list[0]; return isCur() ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)'); };
   const pages = (g) => [...new Set(g.list.map((u) => u.page))];
   const where0 = (g) => (isCur() ? (g.list[0].std || '') : pages(g).map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'));
-  B.innerHTML = `<h2>과제별 결과 <span class="hint">${esc(bookName(book))}</span></h2>
+  B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">${esc(bookName(book))}</span></h2>
     ${opened ? `<p class="note">${esc((r.who || coders).join('·'))} 결과를 보여 줘요. 하위 문항의 칸을 합친 값이에요(같은 칸은 한 번). 노란 칸은 사람마다 다른 칸이에요.</p>` : `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px">비교할 사람이 모두 '코딩 완료'를 누르기 전이라 <b>내 결과만</b> 보여요(독립 코딩 유지). 비교할 사람은 '비교·일치율' 탭에서 고를 수 있어요.</p>`}
-    <div class="bar"><label><input type="checkbox" id="rsDis" ${RS.onlyDis ? 'checked' : ''}> 사람마다 다른 것만 (${rows.filter((x) => x.dis).length}/${rows.length})</label><span class="hint">줄을 누르면 오른쪽에 ${isCur() ? '문장 조각' : '교과서 쪽'}이 나와요</span></div>
-    <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">${isCur() ? '교육과정 문장' : '교과서 과제'}</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>
-      ${shown.map(({ g, by, diff, dis }) => `<tr class="${g.key === RS.sel ? 'on' : ''} ${dis ? 'dis' : ''}" data-rs="${esc(g.key)}"><td class="l"><div class="rs-t">${esc(title(g))}</div><div class="hint">${esc(where0(g))}${g.list.length > 1 ? ` · ${isCur() ? '조각' : '하위 문항'} ${g.list.length}개` : ''}</div></td>
-        ${by.map((x) => `<td>${x ? `${mini43(x.cells, diff)}<div class="rs-sl">${esc(stLit(x.cells))}</div>${x.done < x.all ? `<div class="hint">${x.done}/${x.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${coders.length + 1}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
+    <div class="bar"><label><input type="checkbox" id="rsDis" ${RS.onlyDis ? 'checked' : ''}> 사람마다 다른 것만 (${rows.filter((x) => x.dis).length}/${rows.length})</label>${opened ? `<label><input type="checkbox" id="rsTodo" ${RS.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${nFin}/${rows.length}</b><button id="rsMaj">다수결로 빈 최종 채우기</button>` : ''}<span class="hint">줄을 누르면 오른쪽에 ${isCur() ? '문장 조각' : '교과서 쪽'}이 나와요</span></div>
+    <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">${isCur() ? '교육과정 문장' : '교과서 과제'}</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}${opened ? '<th class="fin-h">최종</th>' : ''}</tr>
+      ${shown.map(({ g, by, diff, dis, maj, fin }) => `<tr class="${g.key === RS.sel ? 'on' : ''} ${dis ? 'dis' : ''}" data-rs="${esc(g.key)}"><td class="l"><div class="rs-t">${esc(title(g))}</div><div class="hint">${esc(where0(g))}${g.list.length > 1 ? ` · ${isCur() ? '조각' : '하위 문항'} ${g.list.length}개` : ''}</div></td>
+        ${by.map((x) => `<td>${x ? `${mini43(x.cells, diff)}<div class="rs-sl">${esc(stLit(x.cells))}</div>${x.done < x.all ? `<div class="hint">${x.done}/${x.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}${opened ? `<td class="fin-c">${fin43(g.list[0].id, fin, maj)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${coders.length + 2}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
     </table></div><aside id="rsSide" class="rs-side"></aside></div>`;
   $('#rsDis').onchange = (e) => { RS.onlyDis = e.target.checked; renderResults(); };
+  if ($('#rsTodo')) $('#rsTodo').onchange = (e) => { RS.onlyTodo = e.target.checked; renderResults(); };
+  const ids = (key) => (rows.find((x) => x.g.list[0].id === key) || { g: { list: [] } }).g.list.map((u) => u.id);
+  const setF = (key, cells) => { FIN43.data.au[key] = { ...(FIN43.data.au[key] || {}), ids: ids(key), cells, by: S.coder || '', t: Date.now() }; saveFin43(); };
+  if ($('#rsMaj')) $('#rsMaj').onclick = () => { let n = 0; rows.forEach((x) => { if (!x.fin && x.maj.length) { FIN43.data.au[x.g.list[0].id] = { ids: x.g.list.map((u) => u.id), cells: x.maj, by: (S.coder || '') + '(다수결)', t: Date.now() }; n++; } }); saveFin43().then(renderResults); toast(`${n}개를 다수결로 채웠어요. 노란 칸이 있던 과제는 꼭 다시 보세요.`); };
+  const onDel = (e) => { e.stopPropagation(); const key = e.currentTarget.closest('[data-fk]').dataset.fk; delete FIN43.data.au[key]; FIN43.data.del = { ...(FIN43.data.del || {}), [key]: Date.now() }; saveFin43(); renderResults(); };
+  B.querySelectorAll('[data-f43del]').forEach((b) => b.onclick = onDel);
+  const onF43 = (e) => {
+    e.stopPropagation(); const b = e.currentTarget;
+    const key = b.closest('[data-fk]').dataset.fk, row = rows.find((x) => x.g.list[0].id === key);
+    const cur = new Set((FIN43.data.au[key] || {}).cells || row.maj || []); const k = b.dataset.f43;
+    if (k === 'X') { const had = cur.has('X') && cur.size === 1; cur.clear(); if (!had) cur.add('X'); } else { cur.delete('X'); cur.has(k) ? cur.delete(k) : cur.add(k); }
+    setF(key, CELL_ALL.filter((x) => cur.has(x)));
+    const td = b.closest('td.fin-c'); td.innerHTML = fin43(key, FIN43.data.au[key], row.maj); row.fin = FIN43.data.au[key];
+    td.querySelectorAll('[data-f43]').forEach((x) => x.onclick = onF43);
+    td.querySelectorAll('[data-f43del]').forEach((x) => x.onclick = onDel);
+  };
+  B.querySelectorAll('[data-f43]').forEach((b) => b.onclick = onF43);
+  B.querySelectorAll('[data-f43ok]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); const key = b.closest('[data-fk]').dataset.fk; const row = rows.find((x) => x.g.list[0].id === key); setF(key, row.maj); renderResults(); });
+
   B.querySelectorAll('[data-rs]').forEach((tr) => tr.onclick = () => { RS.sel = tr.dataset.rs; RS.pg = 0; B.querySelectorAll('[data-rs]').forEach((x) => x.classList.toggle('on', x === tr)); side(); });
   const side = async () => {
     const A = $('#rsSide'); const row = rows.find((x) => x.g.key === RS.sel); if (!A) return;
@@ -1540,7 +1584,9 @@ async function renderResults() {
     const g = row.g;
     A.classList.add('open');
     const head = `<div class="rs-sh"><b>${esc(title(g))}</b><button id="rsX" class="rs-x" title="닫기">✕</button></div>`;
-    const list = `<ol class="rs-sub">${g.list.map((u) => `<li>${esc(isCur() ? u.summary : `${u.task || ''} ${u.summary || ''}`)} <a href="#" data-gou="${u.id}">코딩 화면</a></li>`).join('')}</ol>`;
+    const fk = g.list[0].id, fm = (FIN43.data.au[fk] || {});
+    const memo = opened ? `<label class="hint">최종 메모</label><textarea id="rsMemo" class="memo" rows="2" placeholder="왜 이렇게 정했는지 (회의 메모)">${esc(fm.memo || '')}</textarea>` : '';
+    const list = memo + `<ol class="rs-sub">${g.list.map((u) => `<li>${esc(isCur() ? u.summary : `${u.task || ''} ${u.summary || ''}`)} <a href="#" data-gou="${u.id}">코딩 화면</a></li>`).join('')}</ol>`;
     if (isCur() || !m.pages) { A.innerHTML = head + list; bindSide(); return; }
     const ps = pages(g); RS.pg = Math.min(RS.pg, ps.length - 1); const pg = ps[RS.pg];
     A.innerHTML = head + `${ps.length > 1 ? `<div class="rs-pgs">${ps.map((p, i) => `<button data-rpg="${i}" class="${i === RS.pg ? 'on' : ''}">${esc(m.pages[p].label)}쪽</button>`).join('')}</div>` : `<div class="hint">${esc(m.pages[pg].label)}쪽</div>`}
@@ -1553,6 +1599,7 @@ async function renderResults() {
     A.querySelectorAll('[data-rpg]').forEach((b) => b.onclick = () => { RS.pg = +b.dataset.rpg; side(); });
     A.querySelectorAll('[data-gou]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.gou); });
     if ($('#rsX')) $('#rsX').onclick = () => A.classList.remove('open');
+    if ($('#rsMemo')) $('#rsMemo').onchange = (e) => { const key = RS.sel && rows.find((x) => x.g.key === RS.sel).g.list[0].id; if (!key) return; FIN43.data.au[key] = { ...(FIN43.data.au[key] || { ids: ids(key), cells: [] }), memo: e.target.value, t: Date.now() }; saveFin43(); };
   };
   side();
 }
@@ -1766,6 +1813,15 @@ async function renderStats() {
     const m = S.metas[id]; if (!m) continue;
     const units = id === S.book ? S.units : ((await getStore(`books/${id}/units.json`)).data || {}).units || [];
     exportCSV.cache[id] = units;
+    if (ST.source === 'final') {
+      const f = ((await getStore(`final/${id}_43.json`)).data || {}).au || {};
+      const byId = new Map(units.map((u) => [u.id, u]));
+      Object.entries(f).forEach(([k, v]) => {
+        const us = (v.ids || [k]).map((x) => byId.get(x)).filter((u) => u && ST.kinds.includes(u.kind || 'main'));
+        if (us.length && v.cells && v.cells.length) recs43.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u: us[0], it: { memo: v.memo || '' }, cells: v.cells, au: `${id}#F${k}` });
+      });
+      continue;
+    }
     let items = {};
     if (S.coder) items = id === S.book ? S.mine.items : ((await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`)).data || {}).items || {};
     // 분석 단위(11/10 결정): 교육과정은 원래 문장 하나, 교과서는 과제 번호 하나(괄호 앞이 같고 같은 쪽이나 바로 다음 쪽)
@@ -1781,7 +1837,7 @@ async function renderStats() {
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
   B.innerHTML = `<h2>통계표</h2>
     <div class="bar">
-      <div class="grp"><span>자료</span><b>내 코딩 (${esc(S.coder || '이름 미선택')})</b> <span class="hint">· 저장한 4×3 칸만 셈</span></div>
+      <div class="grp"><span>자료</span><select id="stSrc">${opt([['final', '최종 코드 (최종 코드 탭에서 정한 것)'], ['mine', `내 코딩 (${esc(S.coder || '이름 미선택')})`]], ST.source)}</select></div>
       <div class="grp"><span>묶기</span><select id="stGrp">${opt([['book', '교과서별'], ['period', '시기별'], ['publisher', '출판사별']], ST.group)}</select></div>
     </div>
     <div class="bar">
@@ -1792,6 +1848,7 @@ async function renderStats() {
     ${recs43.length ? '<div class="bar" style="margin-top:16px"><button id="stCsvRec">코딩 기록 CSV (하위 문항별 4×3 칸)</button></div>' : ''}
   `;
   $('#stGrp').onchange = (e) => { ST.group = e.target.value; renderStats(); };
+  $('#stSrc').onchange = (e) => { ST.source = e.target.value; renderStats(); };
   B.querySelectorAll('[data-book]').forEach((el) => el.onchange = () => { ST.books = [...B.querySelectorAll('[data-book]:checked')].map((x) => x.dataset.book); renderStats(); });
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
   if ($('#au43Csv')) $('#au43Csv').onclick = au43Csv;
@@ -1805,7 +1862,7 @@ async function renderStats() {
 // 분석 단위별 4×3 등장 유무 (11/10 결정: 코딩은 쪼갠 단위, 집계는 교육과정 문장·교과서 과제 번호 하나 = 분석 단위 1개, 같은 칸은 한 번만)
 const taskBase = (t) => String(t || '').replace(/\s*[(（①-⑳⑴-⒇].*$/, '').trim(); // 하위 문항 (1)·①·⑴ 앞까지가 큰 과제
 function au43Html(recs43, gname) {
-  if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">4×3 칸을 저장한 단위가 없습니다.</p>`;
+  if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">${ST.source === 'final' ? "아직 정한 최종이 없어요. '최종 코드' 탭에서 정하면 여기에 나와요." : '4×3 칸을 저장한 단위가 없습니다.'}</p>`;
   const AU = new Map();
   recs43.forEach((r) => { let a = AU.get(r.au); if (!a) AU.set(r.au, a = { g: gname(r), cells: new Set(), n: 0 }); r.cells.forEach((c) => a.cells.add(c)); a.n++; });
   const aus = [...AU.values()];
@@ -1820,7 +1877,7 @@ function au43Html(recs43, gname) {
   const cellRow = (label, rs, bold) => `<tr><td class="l">${bold ? '<b>' + esc(label) + '</b>' : esc(label)}</td><td>${rs.length}</td>${CELLS.map((k) => { const n = cnt(rs, (c) => c === k); return `<td>${n || ''}${n ? ` <span class="hint">(${pct(n / rs.length)})</span>` : ''}</td>`; }).join('')}</tr>`;
   AU43.rows = { groups, aus, CELLS, ST4, LT3, recs43, gname };
   return `<h2>4×3 분석 단위 집계 <span class="hint">(등장 유무)</span></h2>
-    <p class="note">코딩은 하위 문항·문장 조각마다 하고, 여기서는 <b>교육과정은 원래 문장 하나, 교과서는 큰 과제 하나</b>(예: 문제 3의 (1)(2)(3), ①②)를 분석 단위 1개로 셉니다. 분석 단위 안에서 그 단계·소양·칸이 한 번이라도 나오면 '있음'(같은 칸이 여러 번 나와도 1번). 괄호 안은 분석 단위 수에 대한 비율이라 합이 100%를 넘을 수 있어요. 4×3 칸을 저장한 단위만 셉니다(자료: ${esc(S.coder || '')}의 코딩).</p>
+    <p class="note">코딩은 하위 문항·문장 조각마다 하고, 여기서는 <b>교육과정은 원래 문장 하나, 교과서는 큰 과제 하나</b>(예: 문제 3의 (1)(2)(3), ①②)를 분석 단위 1개로 셉니다. 분석 단위 안에서 그 단계·소양·칸이 한 번이라도 나오면 '있음'(같은 칸이 여러 번 나와도 1번). 괄호 안은 분석 단위 수에 대한 비율이라 합이 100%를 넘을 수 있어요. 4×3 칸을 저장한 단위만 셉니다(자료: ${ST.source === 'final' ? '최종' : esc(S.coder || '') + '의 코딩'}).</p>
     <h3>단계·소양 등장 <span class="hint">(분석 단위 수, 괄호는 비율)</span></h3>
     <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th>${ST4.map((r) => `<th>${r} ${STN[r]}</th>`).join('')}${LT3.map((l) => `<th>${l} ${LTN[l]}</th>`).join('')}<th>해당 없음</th></tr>
       ${groups.map((g) => rowsOf(g, aus.filter((a) => a.g === g))).join('')}${rowsOf('전체', aus, true)}</table></div>
