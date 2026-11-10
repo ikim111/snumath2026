@@ -512,6 +512,7 @@ function bindTabs() {
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
     document.querySelectorAll('.tab').forEach((s) => s.classList.toggle('on', s.id === 'tab-' + t));
     if (t === 'compare') renderCompare();
+    if (t === 'results') renderResults();
     if (t === 'stats') renderStats();
     if (t === 'settings') renderSettings();
     if (t === 'agree') renderAgree();
@@ -535,6 +536,7 @@ async function selectBook(id) {
   await loadMine();
   const p = Number(ls.get('page:' + id)); if (p && S.metas[id] && p < S.metas[id].pages.length) S.page = p;
   renderAll();
+  if ($('#tab-results').classList.contains('on')) renderResults();
   loadProgress(); // 3분이 지났을 때만 진행률 새로 받기
   prefetchPages(id);
 }
@@ -1485,6 +1487,75 @@ function ovRows(num = false) {
   return rows;
 }
 function exportOverviewCSV() { download(`일치율_한눈에보기_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(ovRows())); }
+
+// ───────── 과제별 결과: 분석 단위(교육과정 원래 문장·교과서 큰 과제)마다 코더별 4×3 ─────────
+const RS = { sel: null, onlyDis: false, pg: 0 };
+const ROWS4 = [['F', '문제설정'], ['C', '자료수집'], ['A', '자료분석'], ['I', '결과해석']], COLS3 = [['K', '지식'], ['R', '추론'], ['C', '소통']];
+function mini43(cells, diff) {
+  if (!cells) return '<span class="hint">—</span>';
+  const on = new Set(cells);
+  return `<table class="mini43"><tr><th></th>${COLS3.map(([c]) => `<th>${c}</th>`).join('')}</tr>${ROWS4.map(([r]) => `<tr><th>${r}</th>${COLS3.map(([c]) => { const k = r + c; return `<td class="${on.has(k) ? 'on' : ''} ${diff && diff.has(k) ? 'df' : ''}">${on.has(k) ? '●' : ''}</td>`; }).join('')}</tr>`).join('')}</table>${on.has('X') && on.size === 1 ? '<div class="hint">해당 없음</div>' : ''}`;
+}
+const stLit = (cells) => { if (!cells) return ''; const st = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[0]))], li = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[1]))]; const o = (a, ref) => ref.map(([k]) => k).filter((k) => a.includes(k)).join('·') || 'X'; return `${o(st, ROWS4)} / ${o(li, COLS3)}`; };
+async function renderResults() {
+  const B = $('#resultsBody');
+  if (!S.book) { B.innerHTML = '<p class="hint">위에서 목록을 고르세요.</p>'; return; }
+  B.innerHTML = '<p class="hint">불러오는 중…</p>';
+  const ORD = ['이성식', '조상연', '김형준'];
+  const book = S.book, coders = [...S.cfg.coders].sort((x, y) => (ORD.indexOf(x) + 1 || 99) - (ORD.indexOf(y) + 1 || 99));
+  let r = null; try { r = await api(`/api/codings?book=${encodeURIComponent(book)}&all=1${whoQ()}`); } catch {}
+  if (book !== S.book) return;
+  const opened = !!(r && r.opened);
+  const itemsOf = (c) => (opened && r.data && r.data[c] ? r.data[c].items || {} : c === S.coder ? S.mine.items : null);
+  const kinds = S.cfg.defaultKinds || ['main', 'intro'];
+  const units = S.units.filter((u) => kinds.includes(u.kind || 'main'));
+  const map = auMap(units, isCur(), book), groups = [];
+  const gi = new Map();
+  units.forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
+  const merged = (c, g) => { const its = itemsOf(c); if (!its) return null; const got = g.list.filter((u) => its[u.id] && Array.isArray(its[u.id].cells) && its[u.id].cells.length); if (!got.length) return null; const set = new Set(got.flatMap((u) => its[u.id].cells)); if (set.size > 1) set.delete('X'); return { cells: CELL_ALL.filter((x) => set.has(x)), done: got.length, all: g.list.length }; };
+  const rows = groups.map((g) => {
+    const by = coders.map((c) => merged(c, g));
+    const full = by.filter((x) => x && x.done === x.all);
+    const diff = new Set(); if (full.length >= 2) CELL_ALL.forEach((k) => { const n = full.filter((x) => x.cells.includes(k)).length; if (n && n < full.length) diff.add(k); });
+    return { g, by, diff, dis: diff.size > 0 };
+  });
+  const shown = RS.onlyDis ? rows.filter((x) => x.dis) : rows;
+  if (!rows.some((x) => x.g.key === RS.sel)) { RS.sel = rows.length ? rows[0].g.key : null; RS.pg = 0; }
+  const m = S.metas[book] || {};
+  const title = (g) => { const u = g.list[0]; return isCur() ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)'); };
+  const pages = (g) => [...new Set(g.list.map((u) => u.page))];
+  const where0 = (g) => (isCur() ? (g.list[0].std || '') : pages(g).map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'));
+  B.innerHTML = `<h2>과제별 결과 <span class="hint">${esc(bookName(book))}</span></h2>
+    ${opened ? `<p class="note">${esc((r.who || coders).join('·'))} 결과를 보여 줘요. 하위 문항의 칸을 합친 값이에요(같은 칸은 한 번). 노란 칸은 사람마다 다른 칸이에요.</p>` : `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px">비교할 사람이 모두 '코딩 완료'를 누르기 전이라 <b>내 결과만</b> 보여요(독립 코딩 유지). 비교할 사람은 '비교·일치율' 탭에서 고를 수 있어요.</p>`}
+    <div class="bar"><label><input type="checkbox" id="rsDis" ${RS.onlyDis ? 'checked' : ''}> 사람마다 다른 것만 (${rows.filter((x) => x.dis).length}/${rows.length})</label><span class="hint">줄을 누르면 오른쪽에 ${isCur() ? '문장 조각' : '교과서 쪽'}이 나와요</span></div>
+    <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">${isCur() ? '교육과정 문장' : '교과서 과제'}</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>
+      ${shown.map(({ g, by, diff, dis }) => `<tr class="${g.key === RS.sel ? 'on' : ''} ${dis ? 'dis' : ''}" data-rs="${esc(g.key)}"><td class="l"><div class="rs-t">${esc(title(g))}</div><div class="hint">${esc(where0(g))}${g.list.length > 1 ? ` · ${isCur() ? '조각' : '하위 문항'} ${g.list.length}개` : ''}</div></td>
+        ${by.map((x) => `<td>${x ? `${mini43(x.cells, diff)}<div class="rs-sl">${esc(stLit(x.cells))}</div>${x.done < x.all ? `<div class="hint">${x.done}/${x.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${coders.length + 1}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
+    </table></div><aside id="rsSide" class="rs-side"></aside></div>`;
+  $('#rsDis').onchange = (e) => { RS.onlyDis = e.target.checked; renderResults(); };
+  B.querySelectorAll('[data-rs]').forEach((tr) => tr.onclick = () => { RS.sel = tr.dataset.rs; RS.pg = 0; B.querySelectorAll('[data-rs]').forEach((x) => x.classList.toggle('on', x === tr)); side(); });
+  const side = async () => {
+    const A = $('#rsSide'); const row = rows.find((x) => x.g.key === RS.sel); if (!A) return;
+    if (!row) { A.innerHTML = ''; return; }
+    const g = row.g;
+    A.classList.add('open');
+    const head = `<div class="rs-sh"><b>${esc(title(g))}</b><button id="rsX" class="rs-x" title="닫기">✕</button></div>`;
+    const list = `<ol class="rs-sub">${g.list.map((u) => `<li>${esc(isCur() ? u.summary : `${u.task || ''} ${u.summary || ''}`)} <a href="#" data-gou="${u.id}">코딩 화면</a></li>`).join('')}</ol>`;
+    if (isCur() || !m.pages) { A.innerHTML = head + list; bindSide(); return; }
+    const ps = pages(g); RS.pg = Math.min(RS.pg, ps.length - 1); const pg = ps[RS.pg];
+    A.innerHTML = head + `${ps.length > 1 ? `<div class="rs-pgs">${ps.map((p, i) => `<button data-rpg="${i}" class="${i === RS.pg ? 'on' : ''}">${esc(m.pages[p].label)}쪽</button>`).join('')}</div>` : `<div class="hint">${esc(m.pages[pg].label)}쪽</div>`}
+      <div class="rs-stage"><img id="rsImg" alt="${esc(m.pages[pg].label)}쪽">${g.list.filter((u) => u.page === pg && u.r).map((u) => `<div class="rs-box" style="left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%"></div>`).join('')}</div>` + list;
+    bindSide();
+    try { const url = await pageImage(book, m.pages[pg].file); const im = $('#rsImg'); if (im && RS.sel === g.key) { im.src = url; im.onload = () => { const b = A.querySelector('.rs-box'); if (b) b.scrollIntoView({ block: 'center' }); }; } } catch { toast('쪽 이미지를 불러오지 못했습니다'); }
+  };
+  const bindSide = () => {
+    const A = $('#rsSide');
+    A.querySelectorAll('[data-rpg]').forEach((b) => b.onclick = () => { RS.pg = +b.dataset.rpg; side(); });
+    A.querySelectorAll('[data-gou]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.gou); });
+    if ($('#rsX')) $('#rsX').onclick = () => A.classList.remove('open');
+  };
+  side();
+}
 
 // ───────── 엑셀(.xlsx) 내보내기: SheetJS를 누를 때만 불러옴 ─────────
 let XLSXP = null;
