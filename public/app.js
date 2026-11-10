@@ -1303,7 +1303,7 @@ function agreeStats(units, items, coders) {
   const all3 = units.filter((u) => coders.every((c) => codesOf(items(c)[u.id]).length));
   const sets3 = all3.map((u) => coders.map((c) => lvSet(items(c)[u.id])));
   const flKs = cats.map((c) => fleiss(sets3.map((row) => row.map((x) => x.includes(c)))).k).filter((k) => !isNaN(k));
-  const fl = { n: all3.length, po: all3.length ? sets3.filter((row) => sameSet(row[0], row[1]) && sameSet(row[1], row[2])).length / all3.length : NaN, k: flKs.length ? flKs.reduce((a, b) => a + b, 0) / flKs.length : NaN };
+  const fl = { n: all3.length, po: all3.length ? sets3.filter((row) => row.every((x) => sameSet(x, row[0]))).length / all3.length : NaN, k: flKs.length ? flKs.reduce((a, b) => a + b, 0) / flKs.length : NaN };
   // 세 명: 요소마다 Fleiss κ와 단순 일치율(세 명이 모두 같게 판단한 비율)
   const lall = units.filter((u) => coders.every((c) => litsOf(items(c)[u.id]).length));
   const L3 = lall.map((u) => coders.map((c) => litsOf(items(c)[u.id])));
