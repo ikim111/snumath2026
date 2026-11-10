@@ -553,7 +553,7 @@ async function loadMine() {
   S.mine = { done: false, items: {} }; S.mineEtag = null;
   if (!S.book || !S.coder) return;
   const r = await api(`/api/codings?book=${encodeURIComponent(S.book)}&coder=${encodeURIComponent(S.coder)}`);
-  if (r.data) { S.mine = { done: false, items: {}, ...r.data }; S.mineEtag = r.etag; }
+  if (r.data) { S.mine = { done: false, items: {}, ...r.data }; S.mineEtag = r.etag; if (!(S.mine.doneV >= 2)) S.mine.done = false; } // 11/10: 4×3 기준으로 바꾸면서 예전 '완료'는 모두 해제(각자 다시 누름)
   S.mineSig = S.book + '|' + S.coder + '|' + JSON.stringify([S.mine.done, S.mine.items]);
   // 비교가 열린 목록이면 다른 두 사람 코딩을 받아 둠(세 명 불일치 표시용)
   S.others = null;
@@ -1098,7 +1098,7 @@ function bindCoding() {
       if (left && !confirm(`아직 4×3 칸을 저장하지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
     if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; }
-    S.mine.done = !S.mine.done; renderDone(); renderPanel(); await saveMine();
+    S.mine.done = !S.mine.done; S.mine.doneV = 2; renderDone(); renderPanel(); await saveMine();
     { const pg = S.prog[S.book]; if (pg) { pg.by = pg.by || {}; pg.by[S.coder] = { ...(pg.by[S.coder] || {}), fin: S.mine.done }; updateBookOption(S.book); } }
     toast(S.mine.done ? '완료로 표시했습니다. 세 명 모두 완료하면 비교 화면이 열립니다.' : '완료 표시를 취소했습니다.');
   };

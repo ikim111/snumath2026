@@ -25,7 +25,7 @@ export async function GET(req) {
     const out = {};
     list.forEach((c, i) => {
       const d = files[i].data || {}, items = d.items || {};
-      out[c] = { done: !!d.done, ids: Object.keys(items).filter((k) => { const it = items[k] || {}; return Array.isArray(it.cells) && it.cells.length > 0; }) };
+      out[c] = { done: !!d.done && d.doneV >= 2, ids: Object.keys(items).filter((k) => { const it = items[k] || {}; return Array.isArray(it.cells) && it.cells.length > 0; }) };
     });
     PROG.set(book, { out, t: Date.now() });
     return json(out);
@@ -33,9 +33,10 @@ export async function GET(req) {
 
   if (q.get('all')) {
     const files = await Promise.all(list.map((c) => readJSON(`codings/${book}/${c}.json`)));
-    const status = Object.fromEntries(list.map((c, i) => [c, !!(files[i].data && files[i].data.done)]));
+    const status = Object.fromEntries(list.map((c, i) => [c, !!(files[i].data && files[i].data.done && files[i].data.doneV >= 2)]));
     const fin = await readJSON(`final/${book}.json`);
-    const opened = Object.values(status).every(Boolean) || !!(fin.data && fin.data.opened);
+    const legacy = list.every((c, i) => files[i].data && files[i].data.done); // 예전에 세 명 모두 완료해 이미 열린 비교는 그대로 열어 둠
+    const opened = Object.values(status).every(Boolean) || legacy || !!(fin.data && fin.data.opened);
     if (!opened) return json({ opened: false, status });
     const data = Object.fromEntries(list.map((c, i) => [c, files[i].data || { items: {} }]));
     return json({ opened: true, status, data });
