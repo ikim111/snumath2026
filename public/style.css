@@ -473,3 +473,8 @@ table.mini43.fin td.on { background: #cfe8d6; }
 table.mini43.fin.sug td.on { background: repeating-linear-gradient(45deg, #e3efe6, #e3efe6 3px, #fff 3px, #fff 6px); }
 table.mini43.fin button.fx { width: 100%; height: auto; font-size: 10px; border: 1px solid var(--line); }
 table.mini43.fin button.fx.on { background: #cfe8d6; }
+
+.cellmk { font-family: ui-monospace, Menlo, monospace; font-weight: 700; color: var(--accent); font-size: 11px; }
+.star { color: #d97706; font-weight: 700; margin-right: 2px; }
+.box.starbox { border-color: #d97706; border-width: 3px; }
+.unit-list .row { grid-template-columns: 30px 38px 1fr auto; }

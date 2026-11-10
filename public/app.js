@@ -331,7 +331,10 @@ const LIT_CLS = { 절: 'lm-p', 추: 'lm-c', 비: 'lm-c', 의: 'lm-m', X: 'lm-x' 
 const litBadge = (lit) => { const m = litMark(lit); return m ? `<span class="lm ${LIT_CLS[m] || ''}">${m}</span>` : ''; };
 const litBadges = (it) => litsOf(it).map(litBadge).join('');
 // 색 있는 표시: 코드(단계 색) + 소양 배지
+const isStar = (it) => !!(it && /★/.test(it.memo || ''));
+const cellStr = (it) => (it && Array.isArray(it.cells) && it.cells.length ? it.cells.join(' ') : '');
 const markHtml = (it, empty = '·') => {
+  if (cellStr(it)) return `${isStar(it) ? '<span class="star">★</span>' : ''}<span class="cellmk">${esc(cellStr(it))}</span>`;
   const c = codeStr(it), b = litBadges(it);
   return c || b ? `<span style="color:${firstColor(it)}">${esc(c)}</span>${b}` : `<span style="color:var(--muted)">${empty}</span>`;
 };
@@ -730,7 +733,7 @@ function boxLabel(u) {
   const it = S.mine.items[u.id] || {};
   const k = u.kind || 'main';
   const cs = isCellDone(it) ? it.cells.join(' ') : ''; // 11/11: 박스 번호표에 4×3 칸을 보여 줌(쪽 단위로 훑어 검토)
-  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${cs ? ' · ' + cs : codeStr(it) ? ' · ' + codeStr(it) : ''}`;
+  const extra = `${k !== 'main' ? ' ' + KINDS[k] : ''}${cs ? ' · ' + (isStar(it) ? '★ ' : '') + cs : codeStr(it) ? ' · ' + codeStr(it) : ''}`;
   return `${unitNo(u)}${extra || litsOf(it).length ? `<span class="tc">${esc(extra)}${cs ? '' : litBadges(it)}</span>` : ''}`;
 }
 
@@ -742,7 +745,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : sel0.includes(u) ? 'sib' : '', markCls(u)].join(' ');
+    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : sel0.includes(u) ? 'sib' : '', isStar(it) ? 'starbox' : '', markCls(u)].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -790,7 +793,7 @@ function step(d) {
   i = i < 0 ? 0 : Math.max(0, Math.min(list.length - 1, i + d));
   select(list[i].id);
 }
-const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isCellDone(S.mine.items[u.id]))) : S.units;
+const visibleUnits = () => S.units.filter((u) => u.id === S.sel || ((!$('#onlyTodo').checked || (isRequired(u) && !isCellDone(S.mine.items[u.id]))) && (!$('#onlyStar') || !$('#onlyStar').checked || isStar(S.mine.items[u.id]))));
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
 // 태블릿·폰만 처음부터 터치로 봄(아이패드는 키보드가 붙으면 hover가 있다고 나와서 따로 확인). 터치 화면 노트북은 마우스로 시작
@@ -1166,6 +1169,7 @@ function bindCoding() {
   $('#editMode').onchange = (e) => { S.edit = e.target.checked; S.draw = false; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
   $('#addBox').onclick = () => { S.draw = !S.draw; renderPage(); if (S.draw) toast('쪽 이미지에서 끌어서 새 박스를 그리세요'); };
   $('#onlyTodo').onchange = renderList;
+  if ($('#onlyStar')) $('#onlyStar').onchange = renderList;
   $('#importCells').onclick = () => { if (!S.coder) { toast('내 이름을 먼저 고르세요'); return; } $('#importFile').value = ''; $('#importFile').click(); };
   $('#importFile').onchange = (e) => { const f = e.target.files[0]; if (f) importCells(f); };
   $('#doneBtn').onclick = async () => {
