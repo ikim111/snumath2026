@@ -1923,7 +1923,7 @@ async function renderStats() {
 }
 
 // 분석 단위별 4×3 등장 유무 (11/10 결정: 코딩은 쪼갠 단위, 집계는 교육과정 문장·교과서 과제 번호 하나 = 분석 단위 1개, 같은 칸은 한 번만)
-const taskBase = (t) => String(t || '').replace(/\s*[(（].*$/, '').trim();
+const taskBase = (t) => String(t || '').replace(/\s*[(（①-⑳⑴-⒇].*$/, '').trim(); // 하위 문항 (1)·①·⑴ 앞까지가 큰 과제
 function au43Html(recs43, gname) {
   if (!recs43.length) return `<h2>4×3 분석 단위 집계</h2><p class="note">4×3 칸을 저장한 단위가 없습니다. ${ST.source === 'final' ? '최종 코드가 아직 없으면 위 \'자료\'를 \'내 코딩\'으로 바꿔 보세요.' : ''}</p>`;
   const AU = new Map();
