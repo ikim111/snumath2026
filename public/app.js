@@ -337,6 +337,7 @@ const markHtml = (it, empty = '·') => {
 };
 const firstColor = (it) => (codesOf(it).length ? stageColor(codesOf(it)[0]) : 'var(--muted)');
 const isDone = (it) => !!(it && codesOf(it).length && litsOf(it).length); // 코드가 있고 소양을 하나 이상(해당 없음 포함) 고른 단위
+const isCellDone = (it) => !!(it && Array.isArray(it.cells) && it.cells.length); // 완료 기준(11/10 이성식 제안): 4×3 칸을 저장했는지. 비교·일치율은 isDone(예전 코드) 그대로
 const isRequired = (u) => (S.cfg.defaultKinds || ['main', 'intro']).includes(u.kind || 'main');
 
 // ───────── 시작 ─────────
@@ -659,7 +660,7 @@ function renderPages() {
   if (!m || !m.pages) { $('#pageList').innerHTML = ''; return; }
   $('#pageList').innerHTML = m.pages.map((p, i) => {
     const us = S.units.filter((u) => u.page === i);
-    const todo = us.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
+    const todo = us.filter((u) => isRequired(u) && !isCellDone(S.mine.items[u.id])).length;
     return `<button data-i="${i}" class="${i === S.page ? 'on' : ''}">${esc(p.label)}<span class="cnt">${us.length}개${todo ? ' · 남음 ' + todo : us.length ? ' ✓' : ''}</span></button>`;
   }).join('');
   $('#pageList').onclick = (e) => { const b = e.target.closest('button'); if (b) goPage(+b.dataset.i); };
@@ -711,7 +712,7 @@ function renderBoxes() {
     const it = S.mine.items[u.id] || {};
     // 행 나누기로 겹친 박스는 번호표를 옆으로 비켜 표시
     const shift = onPage.slice(0, i).filter((v) => Math.abs(v.r[1] - u.r[1]) < 0.012 && Math.abs(v.r[0] + v.r[2] - u.r[0] - u.r[2]) < 0.012).length;
-    const cls = ['box', isDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', markCls(u)].join(' ');
+    const cls = ['box', isCellDone(it) ? 'coded' : codesOf(it).length || litsOf(it).length || cellsOf(it).cells.length ? 'partial' : '', !isRequired(u) ? 'optional' : '', u.id === S.sel || S.multi.has(u.id) ? 'sel' : '', markCls(u)].join(' ');
     const [x, y, w, h] = u.r;
     // 작은 박스가 큰 박스 위에 오게 (겹친 소문항도 누를 수 있게)
     const z = 10 + Math.max(0, 1000 - Math.round(w * h * 1000));
@@ -749,7 +750,7 @@ function select(id, scroll = true) {
 function goNextTodo() {
   const i = S.units.findIndex((u) => u.id === S.sel);
   const after = S.units.slice(i + 1).concat(S.units.slice(0, i + 1));
-  const next = after.find((u) => isRequired(u) && !isDone(S.mine.items[u.id]));
+  const next = after.find((u) => isRequired(u) && !isCellDone(S.mine.items[u.id]));
   if (!next) { toast('이 목록의 필수 단위를 모두 했어요! 오른쪽 아래 \'코딩 완료\'를 눌러 주세요.', 3500); step(1); return; }
   select(next.id);
 }
@@ -759,7 +760,7 @@ function step(d) {
   i = i < 0 ? 0 : Math.max(0, Math.min(list.length - 1, i + d));
   select(list[i].id);
 }
-const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isDone(S.mine.items[u.id]))) : S.units;
+const visibleUnits = () => $('#onlyTodo').checked ? S.units.filter((u) => u.id === S.sel || (isRequired(u) && !isCellDone(S.mine.items[u.id]))) : S.units;
 
 const TOUCH = !!(window.matchMedia && matchMedia('(hover: none)').matches);
 // 태블릿·폰만 처음부터 터치로 봄(아이패드는 키보드가 붙으면 hover가 있다고 나와서 따로 확인). 터치 화면 노트북은 마우스로 시작
@@ -787,7 +788,7 @@ function renderPanel() {
   if (!u && window.innerWidth <= 760 && S.units.length && !renderPanel.auto) {
     // 폰: 목록이 안 보이니 남은 단위 하나를 바로 고름
     renderPanel.auto = true;
-    const n = S.units.find((x) => isRequired(x) && !isDone(S.mine.items[x.id])) || S.units[0];
+    const n = S.units.find((x) => isRequired(x) && !isCellDone(S.mine.items[x.id])) || S.units[0];
     select(n.id); renderPanel.auto = false; return;
   }
   if (!u) {
@@ -816,7 +817,7 @@ function renderPanel() {
 
   const reqHere = isRequired(u);
   const ruleWhy = u ? ruleOf(u) : null;
-  const statusTxt = !canCode ? '' : isDone(it) ? '✓ 이 단위는 다 했어요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요(미완료)' : litsOf(it).length ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
+  const statusTxt = !canCode ? '' : isCellDone(it) ? '✓ 이 단위는 다 했어요(4×3 칸 저장됨)' : cellsOf(it).cells.length ? '4×3 칸이 아직 저장 전이에요 — 칸을 누르거나 \'이대로 저장\'을 눌러 주세요' : codesOf(it).length ? '② 통계적 소양을 골라 주세요(미완료)' : litsOf(it).length ? '① 코드를 골라 주세요' : reqHere ? '① 코드와 ② 소양을 고르세요' : '이 유형은 코딩이 선택이에요';
   P.innerHTML = `
     <div class="u-head">
       <span class="num">#${unitNo(u)}</span>
@@ -936,7 +937,7 @@ function renderList() {
   const list = visibleUnits();
   const m = S.metas[S.book];
   const req = S.units.filter(isRequired);
-  const done = req.filter((u) => isDone(S.mine.items[u.id])).length;
+  const done = req.filter((u) => isCellDone(S.mine.items[u.id])).length;
   if (S.book) { S.prog[S.book] = { ...(S.prog[S.book] || {}), done, total: req.length }; updateBookOption(S.book); }
   const dis = S.others ? req.filter(isDis).length : 0, a3 = S.others ? req.filter((u) => all3Of(u)).length : 0, rul = req.filter((u) => ruleOf(u)).length;
   $('#progress').textContent = S.units.length ? `코딩 ${done}/${req.length} · 합의와 다름 ${rul}${S.others ? ` · 세 명 모두 다름 ${a3} · 다름 ${dis}` : ''}` : '';
@@ -953,7 +954,7 @@ function renderList() {
 function renderDone() {
   const b = $('#doneBtn');
   b.disabled = !S.coder || !S.book;
-  const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
+  const left = S.units.filter((u) => isRequired(u) && !isCellDone(S.mine.items[u.id])).length;
   b.textContent = S.mine.done ? '✓ 완료함 · 누르면 완료 취소' : left ? `코딩 완료 (${left}개 남음)` : '모두 했어요 → 코딩 완료 누르기';
   b.classList.toggle('ready', !S.mine.done && !left && S.units.length > 0);
   b.classList.toggle('done', !!S.mine.done);
@@ -1093,8 +1094,8 @@ function bindCoding() {
   $('#bulkCells').onclick = bulkSaveCells;
   $('#doneBtn').onclick = async () => {
     if (!S.mine.done) {
-      const left = S.units.filter((u) => isRequired(u) && !isDone(S.mine.items[u.id])).length;
-      if (left && !confirm(`아직 코드·소양을 다 고르지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
+      const left = S.units.filter((u) => isRequired(u) && !isCellDone(S.mine.items[u.id])).length;
+      if (left && !confirm(`아직 4×3 칸을 저장하지 않은 단위가 ${left}개 있습니다. 그래도 완료로 표시할까요?`)) return;
     }
     if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; }
     S.mine.done = !S.mine.done; renderDone(); renderPanel(); await saveMine();
