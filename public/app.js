@@ -1010,6 +1010,43 @@ const SAVE_DELAY = 8000; // 자동 저장 간격(ms): 저장소 쓰기 횟수를
 function scheduleMine() { saveState('저장 대기…'); clearTimeout(mineTimer); mineTimer = setTimeout(() => { mineTimer = null; saveMine(); }, SAVE_DELAY); }
 
 // 11/6: 내 코딩 전체에서 칸을 직접 고르지 않았고 ①②로 정할 수 있는 단위(바로·추정·없음)의 칸을 한꺼번에 저장. ①② 값은 안 바꿈
+// 11/10: Claude 코딩 + 형준 검토 결과를 내 이름으로 넣기. CSV 열: 목록ID, 단위ID, 4×3 칸(공백으로), 메모
+async function importCells(file) {
+  const rows = parseCSV(await file.text()); const head = rows.shift() || [];
+  const ci = (re) => head.findIndex((h) => re.test(h));
+  const iB = ci(/목록|book/i), iU = ci(/단위ID|^id$/i), iC = ci(/칸|cells/i), iM = ci(/메모|memo/i);
+  if (iU < 0 || iC < 0) { toast('열 이름을 확인하세요: 목록ID, 단위ID, 4×3 칸'); return; }
+  const by = new Map();
+  rows.forEach((r) => { const id = (r[iU] || '').trim(); if (!id) return; const b = iB >= 0 ? (r[iB] || '').trim() : ''; if (!by.has(b)) by.set(b, []); by.get(b).push({ id, cells: String(r[iC] || '').trim().split(/\s+/).filter(Boolean), memo: iM >= 0 ? r[iM] || '' : '' }); });
+  const keep = confirm(`${S.coder} 이름으로 ${rows.length}단위를 넣어요.\n\n이미 내가 4×3 칸을 직접 저장한 단위는 그대로 둘까요?\n[확인] 내가 한 것은 그대로 두고 빈 단위만 채움\n[취소] 다음 질문으로`);
+  if (!keep && !confirm('파일 내용으로 내 칸을 모두 덮어쓸까요? (취소하면 아무것도 안 바꿔요)')) return;
+  if (mineTimer) { clearTimeout(mineTimer); mineTimer = null; await saveMine(); }
+  let put = 0, skip = 0, miss = 0, excl = 0;
+  const books = by.has('') ? S.cfg.books : [...by.keys()].filter((b) => S.cfg.books.includes(b));
+  for (const id of books) {
+    const list = by.get(id) || by.get('') || [];
+    try {
+      const u = ((await getStore(`books/${id}/units.json`)).data || {}).units || []; const ids = new Set(u.map((x) => x.id));
+      const r = await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`);
+      const data = r.data || { items: {} }; data.items ||= {}; let n = 0;
+      for (const x of list) {
+        if (!ids.has(x.id)) { if (!by.has('')) miss++; continue; }
+        const it = data.items[x.id] || {};
+        if (keep && it.cellsManual && Array.isArray(it.cells) && it.cells.length) { skip++; continue; }
+        let cells = x.cells.filter((c) => CELL_ALL.includes(c));
+        if (x.cells.includes('제외')) { cells = ['X']; excl++; }
+        if (!cells.length) continue;
+        data.items[x.id] = { ...it, cells: CELL_ALL.filter((c) => cells.includes(c)), cellsManual: true, src: 'Claude+검토', memo: x.memo || it.memo || '', t: Date.now() }; n++;
+      }
+      if (!n) continue;
+      const w = await api(`/api/codings?book=${encodeURIComponent(id)}&coder=${encodeURIComponent(S.coder)}`, { method: 'PUT', body: JSON.stringify({ data: { ...data, coder: S.coder, updated: Date.now() }, etag: r.etag }) });
+      if (!w.ok) { toast(`${id} 저장 실패 — 다시 해 주세요`); continue; }
+      put += n;
+    } catch (e) { toast(`${id} 저장 실패: ${e.message}`); }
+  }
+  await loadMine(); renderAll(); loadProgress(true);
+  toast(`넣음 ${put}단위${skip ? ` · 내가 한 것 그대로 ${skip}` : ''}${excl ? ` · 분석 제외 ${excl}(해당 없음 칸으로)` : ''}${miss ? ` · 사이트에 없는 단위 ${miss}` : ''} — 목록마다 '코딩 완료'는 직접 눌러 주세요`, 6000);
+}
 async function bulkSaveCells() {
   if (!S.coder) { toast('내 이름을 먼저 고르세요'); return; }
   if (!confirm(`${S.coder} 코딩 전체(모든 목록)에서 ①②로 칸을 정할 수 있는 단위의 4×3 칸을 저장할까요?\n①② 값과 직접 고른 칸은 그대로 두고, 칸을 정할 수 없는 단위(단계·소양 둘 다 여러 개)는 비워 둡니다.`)) return;
@@ -1128,7 +1165,8 @@ function bindCoding() {
   $('#editMode').onchange = (e) => { S.edit = e.target.checked; S.draw = false; $('#editHelp').classList.toggle('hidden', !S.edit); renderPage(); renderPanel(); };
   $('#addBox').onclick = () => { S.draw = !S.draw; renderPage(); if (S.draw) toast('쪽 이미지에서 끌어서 새 박스를 그리세요'); };
   $('#onlyTodo').onchange = renderList;
-  $('#bulkCells').onclick = bulkSaveCells;
+  $('#importCells').onclick = () => { if (!S.coder) { toast('내 이름을 먼저 고르세요'); return; } $('#importFile').value = ''; $('#importFile').click(); };
+  $('#importFile').onchange = (e) => { const f = e.target.files[0]; if (f) importCells(f); };
   $('#doneBtn').onclick = async () => {
     if (!S.mine.done) {
       const left = S.units.filter((u) => isRequired(u) && !isCellDone(S.mine.items[u.id])).length;
