@@ -1688,7 +1688,7 @@ const CE_GRP = { '줄기와 잎 그림': '도수분포표·그래프', '도수�
 const CE_PICK = ['통계적 탐구', '산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '기타'];
 const CE_ORD = ['산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '통계적 탐구', '기타'];
 const ceOfG = (list) => { const s = new Set(list.flatMap((u) => unitCE(u)).map((c) => CE_GRP[c] || c)); return CE_PICK.find((c) => s.has(c)) || [...s][0] || '기타'; };
-const rsModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${RS.all ? '' : 'on'}" data-rall="0">이 목록만</button><button class="rs-chip big ${RS.all ? 'on' : ''}" data-rall="1">모든 목록 · 내용 요소별</button></div>`;
+const rsModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${RS.all ? '' : 'on'}" data-rall="0">이 목록만</button><button class="rs-chip big ${RS.all ? 'on' : ''}" data-rall="1">모든 목록 한꺼번에</button></div>`;
 const bindModeBar = (B) => B.querySelectorAll('[data-rall]').forEach((b) => b.onclick = () => { const v = b.dataset.rall === '1'; if (v === !!RS.all) return; RS.all = v; if (v) RA.t = 0; renderResults(); });
 async function renderResultsAll() {
   const B = $('#resultsBody');
@@ -1726,39 +1726,42 @@ async function renderResultsAll() {
   const inC = (x) => !RA.ce || x.ce === RA.ce, inG = (x) => !RA.grp || x.grp === RA.grp;
   const cnt = (f) => { const o = {}; rows.filter(f).forEach((x) => { o[x.k] = (o[x.k] || 0) + 1; }); return o; };
   rows.forEach((x) => { x.k = x.ce; }); const ceAll = cnt(() => true); const ceDis = cnt((x) => x.pri <= 1);
-  rows.forEach((x) => { x.k = x.grp; }); const gcount = cnt(inC);
-  if (RA.grp && !gcount[RA.grp]) { RA.grp = ''; RA.type = ''; }
-  rows.forEach((x) => { x.k = x.type; }); const tcount = cnt((x) => inC(x) && inG(x)); const allT = cnt(() => true);
-  if (RA.type && !tcount[RA.type]) RA.type = '';
+  rows.forEach((x) => { x.k = x.grp; }); const gcount = cnt(() => true);
+  if (RA.grp && !gcount[RA.grp]) { RA.grp = ''; RA.type = ''; RA.ce = ''; }
+  rows.forEach((x) => { x.k = x.type; }); const tcount = cnt(inG); const allT = cnt(() => true);
+  const inT = (x) => !RA.type || x.type === RA.type;
+  if (RA.type && !tcount[RA.type]) { RA.type = ''; RA.ce = ''; }
+  rows.forEach((x) => { x.k = x.ce; }); const ceIn = cnt((x) => inG(x) && inT(x)); const ceInDis = cnt((x) => inG(x) && inT(x) && x.pri <= 1);
+  if (RA.ce && !ceIn[RA.ce]) RA.ce = '';
   const tOrder = Object.keys(tcount).sort((a, b) => tcount[b] - tcount[a] || a.localeCompare(b, 'ko'));
   const ceI = (c) => (CE_ORD.indexOf(c) + 1 || 99), ceList = [...CE_ORD, ...Object.keys(ceAll).filter((c) => !CE_ORD.includes(c))];
-  const sorted = [...rows].sort((a, b) => (a.pri > 1) - (b.pri > 1) || ceI(a.ce) - ceI(b.ce) || a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || (tcount[b.type] || 0) - (tcount[a.type] || 0) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko'));
-  let shown = sorted.filter((x) => inC(x) && inG(x)); if (RA.type) shown = shown.filter((x) => x.type === RA.type);
+  const sorted = [...rows].sort((a, b) => a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || (tcount[b.type] || 0) - (tcount[a.type] || 0) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko') || ceI(a.ce) - ceI(b.ce));
+  let shown = sorted.filter((x) => inG(x) && inT(x) && inC(x));
   if (RA.onlyTodo) shown = shown.filter((x) => !x.fin);
   const LIMIT = 150, more = shown.length - LIMIT, view = shown.slice(0, LIMIT);
   if (!view.some((x) => x.g.key === RA.sel)) { RA.sel = view.length ? view[0].g.key : null; RA.pg = 0; }
   const nE = rows.filter((x) => x.pri === 0).length, nCell = rows.filter((x) => x.pri === 1).length, nSame = rows.filter((x) => x.pri === 2).length;
   const fins = (f) => rows.filter((x) => f(x) && x.fin).length;
-  const cechip = (c) => { const d = fins((x) => x.ce === c && x.pri <= 1); return `<button class="rs-chip big p0 ${RA.ce === c ? 'on' : ''}" data-race="${esc(c)}">${esc(c)} <b>${ceDis[c] || 0}</b><span class="hint">/${ceAll[c]}</span>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
-  const gchip = (gname) => { const d = fins((x) => inC(x) && x.grp === gname), pr = rows.find((x) => x.grp === gname).pri; return `<button class="rs-chip p${pr} ${RA.grp === gname ? 'on' : ''}" data-ragrp="${esc(gname)}">${esc(gname)} <b>${gcount[gname]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
-  const tchip = (t) => { const d = fins((x) => inC(x) && inG(x) && x.type === t); return `<button class="rs-chip p${rows.find((x) => x.type === t).pri} ${RA.type === t ? 'on' : ''}" data-ratype="${esc(t)}">${esc(t)} <b>${tcount[t]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const cechip = (c) => { const d = fins((x) => inG(x) && inT(x) && x.ce === c); return `<button class="rs-chip ${RA.ce === c ? 'on' : ''}" data-race="${esc(c)}">${esc(c)} <b>${RA.grp ? ceIn[c] : ceInDis[c] || 0}</b>${RA.grp ? '' : `<span class="hint">/${ceIn[c]}</span>`}${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const gchip = (gname) => { const d = fins((x) => x.grp === gname), pr = rows.find((x) => x.grp === gname).pri; return `<button class="rs-chip big p${pr} ${RA.grp === gname ? 'on' : ''}" data-ragrp="${esc(gname)}">${esc(gname)} <b>${gcount[gname]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const tchip = (t) => { const d = fins((x) => inG(x) && x.type === t); return `<button class="rs-chip p${rows.find((x) => x.type === t).pri} ${RA.type === t ? 'on' : ''}" data-ratype="${esc(t)}">${esc(t)} <b>${tcount[t]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
   const where0 = (x) => { const m = S.metas[x.book] || {}; return x.cur ? (x.g.list[0].std || '') : [...new Set(x.g.list.map((u) => u.page))].map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'); };
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
     <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개 <span class="hint">(전체 ${rows.length}개${closed ? ` · 아직 안 열린 목록 ${closed}개는 빠짐` : ''})</span></div>
-    <div class="rs-chips"><span class="hint">⓪ 내용 요소</span><button class="rs-chip big ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${nE + nCell}</b><span class="hint">/${rows.length}</span></button>${ceList.filter((c) => ceAll[c]).map(cechip).join('')}</div>
-    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.filter(inC).length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
+    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
     ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="hint">② 무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
-    <div class="bar">${RA.grp ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">숫자는 요소가 다른 과제 / 전체예요. 줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
+    <div class="rs-chips"><span class="hint">③ 내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div>
+    <div class="bar">${RA.grp ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
     <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">과제</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th class="fin-h">최종</th></tr>
       ${view.map((x) => `<tr class="${x.g.key === RA.sel ? 'on' : ''} ${x.dis ? 'dis' : ''}" data-ra="${esc(x.g.key)}"><td class="l"><div class="hint">${esc(shortBook(x.book))}</div><div class="rs-t">${esc(x.title)}</div><div class="rs-ty p${x.pri}">${esc(x.type)}</div> <span class="rs-ty">${esc(x.ce)}</span><div class="hint">${esc(where0(x))}${x.g.list.length > 1 ? ` · ${x.cur ? '조각' : '하위 문항'} ${x.g.list.length}개` : ''}</div></td>
         ${x.by.map((b) => `<td>${b ? `${mini43(b.cells, x.diff)}<div class="rs-sl">${esc(stLit(b.cells))}</div>${b.done < b.all ? `<div class="hint">${b.done}/${b.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}<td class="fin-c">${fin43(x.g.list[0].id, x.fin, x.maj)}</td></tr>`).join('') || `<tr><td colspan="${coders.length + 2}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
       ${more > 0 ? `<tr><td colspan="${coders.length + 2}" class="hint">아래에 ${more}개가 더 있어요. 위에서 정하거나 묶음·유형을 골라 좁혀 보세요.</td></tr>` : ''}
     </table></div><aside id="raSide" class="rs-side"></aside></div>`;
   bindModeBar(B);
-  B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.ce = b.dataset.race; RA.grp = ''; RA.type = ''; RA.sel = null; renderResults(); });
-  B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.grp = b.dataset.ragrp; RA.type = ''; RA.sel = null; renderResults(); });
-  B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.type = b.dataset.ratype; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.ce = b.dataset.race; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.grp = b.dataset.ragrp; RA.type = ''; RA.ce = ''; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.type = b.dataset.ratype; RA.ce = ''; RA.sel = null; renderResults(); });
   $('#raTodo').onchange = (e) => { RA.onlyTodo = e.target.checked; renderResults(); };
   const rowOf = (key) => rows.find((x) => x.g.list[0].id === key);
   const F = (x) => RA.fins[x.book];
