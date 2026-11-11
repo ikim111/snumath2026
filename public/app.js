@@ -516,6 +516,7 @@ function bindTabs() {
     document.querySelectorAll('.tab').forEach((s) => s.classList.toggle('on', s.id === 'tab-' + t));
     if (t === 'compare') renderCompare();
     if (t === 'results') renderResults();
+    if (t === 'groups') renderGroups();
     if (t === 'stats') renderStats();
     if (t === 'settings') renderSettings();
     if (t === 'agree') renderAgree();
@@ -642,16 +643,17 @@ const unitNo = (u) => S.units.indexOf(u) + 1;
 function auMap(units, cur, pre = '') {
   const last = new Map(), au = new Map(); let gi = 0;
   [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => {
-    const base = cur ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
+    // u.aug: '묶음' 탭에서 직접 정한 묶음 이름. 있으면 쪽이 떨어져 있어도 같은 과제
+    const base = u.aug ? '@' + u.aug : cur ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
     const pg = u.page || 0, prev = last.get(base);
-    const key = prev && (cur || pg - prev.page <= 1) ? prev.key : `${pre}#${++gi}`;
+    const key = prev && (cur || u.aug || pg - prev.page <= 1) ? prev.key : `${pre}#${++gi}`;
     last.set(base, { page: pg, key }); au.set(u.id, key);
   });
   return au;
 }
 // 코딩 화면용: 지금 목록의 단위 → 같은 분석 단위 형제들
 function auNow() {
-  const sig = S.book + '|' + S.units.map((u) => u.id + ':' + (u.task || '') + ':' + (u.orig || '') + ':' + u.page).join(',');
+  const sig = S.book + '|' + S.units.map((u) => u.id + ':' + (u.task || '') + ':' + (u.orig || '') + ':' + u.page + ':' + (u.aug || '')).join(',');
   if (auNow.sig !== sig) {
     const m = auMap(S.units, isCur()), g = new Map();
     S.units.forEach((u) => { const k = m.get(u.id); if (!g.has(k)) g.set(k, []); g.get(k).push(u); });
@@ -1812,6 +1814,57 @@ async function renderResultsAll() {
     try { const url = await pageImage(x.book, m.pages[pg].file); const im = $('#raImg'); if (im && RA.sel === g.key) { im.src = url; im.onload = () => { const b = A.querySelector('.rs-box'); if (b) b.scrollIntoView({ block: 'center' }); }; } } catch { toast('쪽 이미지를 불러오지 못했습니다'); }
   };
   side();
+}
+
+// ───────── 묶음: 어떤 문항(박스)을 한 과제(분석 단위)로 묶었는지 보고 고치기 ─────────
+// 자동 묶음 = 교과서는 같은 과제 번호(하위 문항 (1)(2) 앞까지)+붙은 쪽, 교육과정은 같은 원래 문장.
+// 직접 묶음 = u.aug(묶음 이름). 떼어 낸 문항은 자기만의 aug를 가짐.
+const GR = { sel: new Set(), onlyCE: '', onlyMulti: false };
+async function renderGroups() {
+  const B = $('#groupsBody'); if (!B) return;
+  if (!S.book) { B.innerHTML = '<p class="hint">위에서 목록을 고르세요.</p>'; return; }
+  const book = S.book, cur = isCur(), m = S.metas[book] || {};
+  let F = null; try { F = await getStore(`final/${book}_43.json`); } catch {}
+  if (book !== S.book) return;
+  const fin = (F && F.data && F.data.au) || {};
+  const kinds = S.cfg.defaultKinds || ['main', 'intro'];
+  const units = S.units.filter((u) => kinds.includes(u.kind || 'main'));
+  const map = auMap(units, cur, book), groups = [], gi = new Map();
+  [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
+  GR.sel = new Set([...GR.sel].filter((id) => units.some((u) => u.id === id)));
+  const pgl = (u) => (cur ? (u.std || '') : m.pages && m.pages[u.page] ? m.pages[u.page].label + '쪽' : '');
+  const ceG = (g) => ceOfG(g.list);
+  const ces = [...new Set(groups.map(ceG))];
+  let shown = groups;
+  if (GR.onlyCE) shown = shown.filter((g) => ceG(g) === GR.onlyCE);
+  if (GR.onlyMulti) shown = shown.filter((g) => g.list.length > 1);
+  const nMan = groups.filter((g) => g.list.some((u) => u.aug)).length;
+  const finWarn = (g) => { const f = fin[g.list[0].id]; const ids = g.list.map((u) => u.id).sort().join(); const stale = Object.entries(fin).filter(([k, v]) => v && Array.isArray(v.ids) && v.ids.some((id) => g.list.some((u) => u.id === id)) && v.ids.slice().sort().join() !== ids); return f && Array.isArray(f.ids) && f.ids.slice().sort().join() === ids ? '' : stale.length || (f && f.ids && f.ids.slice().sort().join() !== ids) ? '<span class="gr-warn">묶음이 바뀜 · 최종 코드 다시 확인</span>' : ''; };
+  B.innerHTML = `<h2>묶음 확인 <span class="hint">${esc(bookName(book))}</span></h2>
+    <p class="note">한 과제(분석 단위)로 묶인 문항들이에요. 일치도와 결과는 이 묶음마다 하위 문항의 칸을 합쳐서 셉니다. 자동 묶음: ${cur ? '같은 원래 문장' : '같은 과제 번호((1)(2) 앞까지)이고 붙은 쪽'}. 문항을 고른 뒤 아래 버튼으로 묶거나 떼어 내세요.</p>
+    <div class="rs-stats">
+      <div class="rs-stat"><span>과제(분석 단위)</span><b>${groups.length}</b><small>문항 ${units.length}개</small></div>
+      <div class="rs-stat"><span>2개 이상 묶인 과제</span><b>${groups.filter((g) => g.list.length > 1).length}</b></div>
+      <div class="rs-stat"><span>직접 고친 묶음</span><b>${nMan}</b></div>
+      <div class="rs-stat"><span>최종 코드 다시 확인</span><b>${groups.filter((g) => finWarn(g)).length}</b><small>묶음이 바뀐 과제</small></div>
+    </div>
+    <div class="rs-filter"><div class="rs-chips"><span class="rs-lab">내용 요소</span><button class="rs-chip ${GR.onlyCE ? '' : 'on'}" data-grce="">전체 <b>${groups.length}</b></button>${ces.map((c) => `<button class="rs-chip ${GR.onlyCE === c ? 'on' : ''}" data-grce="${esc(c)}">${esc(c)} <b>${groups.filter((g) => ceG(g) === c).length}</b></button>`).join('')}<label class="hint" style="margin-left:8px"><input type="checkbox" id="grMulti" ${GR.onlyMulti ? 'checked' : ''}> 2개 이상 묶인 것만</label></div></div>
+    <div class="bar gr-bar"><b id="grN">고른 문항 ${GR.sel.size}개</b><button id="grJoin" class="gr-main">고른 문항을 한 과제로 묶기</button><button id="grSplit">고른 문항을 따로 떼기</button><button id="grAuto">고른 문항을 자동 묶음으로 되돌리기</button><button id="grClear">고르기 풀기</button></div>
+    <div class="gr-list">${shown.map((g, i) => { const man = g.list.some((u) => u.aug); return `<div class="gr-card ${g.list.length > 1 ? 'multi' : ''}" data-grk="${esc(g.key)}">
+      <div class="gr-head"><label><input type="checkbox" data-grall="${esc(g.key)}" ${g.list.every((u) => GR.sel.has(u.id)) ? 'checked' : ''}> <b>${esc(cur ? (g.list[0].orig || g.list[0].summary || '') : (taskBase(g.list[0].task) || g.list[0].summary || '(과제 번호 없음)'))}</b></label>
+        <span class="rs-ty">${esc(ceG(g))}</span><span class="rs-ty ${man ? 'p0' : ''}">${man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${g.list.length}개 · ${esc([...new Set(g.list.map(pgl))].join('·'))}</span>${finWarn(g)}</div>
+      <ol class="gr-items">${g.list.map((u) => `<li><label><input type="checkbox" data-gru="${u.id}" ${GR.sel.has(u.id) ? 'checked' : ''}> <span class="gr-task">${esc(cur ? (u.task || '') : (u.task || ''))}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(u))}${(u.kind || 'main') !== 'main' ? ' · ' + esc(KINDS[u.kind] || u.kind) : ''}</span></label></li>`).join('')}</ol></div>`; }).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div>`;
+  const upd = () => { $('#grN').textContent = `고른 문항 ${GR.sel.size}개`; };
+  B.querySelectorAll('[data-gru]').forEach((c) => c.onchange = () => { c.checked ? GR.sel.add(c.dataset.gru) : GR.sel.delete(c.dataset.gru); upd(); });
+  B.querySelectorAll('[data-grall]').forEach((c) => c.onchange = () => { const g = groups.find((x) => x.key === c.dataset.grall); g.list.forEach((u) => (c.checked ? GR.sel.add(u.id) : GR.sel.delete(u.id))); c.closest('.gr-card').querySelectorAll('[data-gru]').forEach((x) => { x.checked = c.checked; }); upd(); });
+  B.querySelectorAll('[data-grce]').forEach((b) => b.onclick = () => { GR.onlyCE = b.dataset.grce; renderGroups(); });
+  $('#grMulti').onchange = (e) => { GR.onlyMulti = e.target.checked; renderGroups(); };
+  const picked = () => S.units.filter((u) => GR.sel.has(u.id));
+  const done = (msg) => { GR.sel.clear(); auNow.sig = null; renderGroups(); toast(msg); };
+  $('#grJoin').onclick = () => { const us = picked(); if (us.length < 2) return toast('묶을 문항을 2개 이상 고르세요.'); const name = 'g' + Date.now().toString(36); us.forEach((u) => { u.aug = name; markDirty(u); }); done(`${us.length}개 문항을 한 과제로 묶었어요. 최종 코드가 있던 과제는 다시 확인하세요.`); };
+  $('#grSplit').onclick = () => { const us = picked(); if (!us.length) return toast('뗄 문항을 고르세요.'); us.forEach((u) => { u.aug = 's' + u.id; markDirty(u); }); done(`${us.length}개 문항을 각각 따로 떼었어요.`); };
+  $('#grAuto').onclick = () => { const us = picked().filter((u) => u.aug); if (!us.length) return toast('직접 묶음인 문항을 고르세요.'); us.forEach((u) => { delete u.aug; markDirty(u); }); done(`${us.length}개 문항을 자동 묶음으로 되돌렸어요.`); };
+  $('#grClear').onclick = () => { GR.sel.clear(); renderGroups(); };
 }
 
 // ───────── 엑셀(.xlsx) 내보내기: SheetJS를 누를 때만 불러옴 ─────────
