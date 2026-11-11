@@ -478,3 +478,13 @@ table.mini43.fin button.fx.on { background: #cfe8d6; }
 .star { color: #d97706; font-weight: 700; margin-right: 2px; }
 .box.starbox { border-color: #d97706; border-width: 3px; }
 .unit-list .row { grid-template-columns: 30px 38px 1fr auto; }
+
+.rs-sum { margin: 6px 0; }
+.rs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.rs-chip { border: 1px solid var(--line, #ccd); background: #fff; border-radius: 14px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.rs-chip.on { background: var(--accent, #2f5d8a); color: #fff; border-color: transparent; }
+.rs-chip.on .hint { color: #e8eef5; }
+.rs-chip.p0 { border-color: #e0b100; }
+.rs-ty { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; margin: 2px 0; background: #eef1f4; }
+.rs-ty.p0 { background: #fff1c2; }
+.rs-ty.p1 { background: #f3f3f3; color: #666; }
