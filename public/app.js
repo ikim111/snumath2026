@@ -1732,7 +1732,7 @@ async function renderResultsAll() {
   if (RA.type && !tcount[RA.type]) RA.type = '';
   const tOrder = Object.keys(tcount).sort((a, b) => tcount[b] - tcount[a] || a.localeCompare(b, 'ko'));
   const ceI = (c) => (CE_ORD.indexOf(c) + 1 || 99), ceList = [...CE_ORD, ...Object.keys(ceAll).filter((c) => !CE_ORD.includes(c))];
-  const sorted = [...rows].sort((a, b) => (a.pri > 1) - (b.pri > 1) || ceI(a.ce) - ceI(b.ce) || a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko'));
+  const sorted = [...rows].sort((a, b) => (a.pri > 1) - (b.pri > 1) || ceI(a.ce) - ceI(b.ce) || a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || (tcount[b.type] || 0) - (tcount[a.type] || 0) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko'));
   let shown = sorted.filter((x) => inC(x) && inG(x)); if (RA.type) shown = shown.filter((x) => x.type === RA.type);
   if (RA.onlyTodo) shown = shown.filter((x) => !x.fin);
   const LIMIT = 150, more = shown.length - LIMIT, view = shown.slice(0, LIMIT);
