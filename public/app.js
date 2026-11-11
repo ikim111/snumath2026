@@ -1545,16 +1545,16 @@ function mini43(cells, diff) {
 const stLit = (cells) => { if (!cells) return ''; const st = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[0]))], li = [...new Set(cells.filter((x) => x.length === 2).map((x) => x[1]))]; const o = (a, ref) => ref.map(([k]) => k).filter((k) => a.includes(k)).join('·') || 'X'; return `${o(st, ROWS4)} / ${o(li, COLS3)}`; };
 // 최종 4×3(분석 단위별): final/<목록>_43.json  { au: { 첫 단위 id: { ids, cells, memo, by, t } } }
 const FIN43 = { book: null, data: { au: {} }, etag: null };
-async function saveFin43(retry = true) {
+async function saveFin43(retry = true, F = FIN43) {
   saveState('최종 저장 중…');
-  const r = await putStore(`final/${FIN43.book}_43.json`, FIN43.data, FIN43.etag);
-  if (r.ok) { FIN43.etag = r.etag; saveState('최종 저장됨'); return; }
+  const r = await putStore(`final/${F.book}_43.json`, F.data, F.etag);
+  if (r.ok) { F.etag = r.etag; saveState('최종 저장됨'); return; }
   if (retry && r.current && r.current.data) { // 다른 사람이 먼저 저장: 과제마다 나중 것을 남김
     const o = r.current.data.au || {}, m = { ...o };
-    Object.entries(FIN43.data.au).forEach(([k, v]) => { if (!o[k] || (v.t || 0) >= (o[k].t || 0)) m[k] = v; });
-    const del = { ...(r.current.data.del || {}), ...(FIN43.data.del || {}) };
+    Object.entries(F.data.au).forEach(([k, v]) => { if (!o[k] || (v.t || 0) >= (o[k].t || 0)) m[k] = v; });
+    const del = { ...(r.current.data.del || {}), ...(F.data.del || {}) };
     Object.entries(del).forEach(([k, t]) => { if (m[k] && (m[k].t || 0) < t) delete m[k]; });
-    FIN43.data = { ...r.current.data, au: m, del }; FIN43.etag = r.current.etag; return saveFin43(false);
+    F.data = { ...r.current.data, au: m, del }; F.etag = r.current.etag; return saveFin43(false, F);
   }
   saveState('최종 저장 실패 — 다시 눌러 주세요', true);
 }
@@ -1564,7 +1564,23 @@ function fin43(key, fin, maj) {
     <div class="rs-sl">${cells.length ? esc(stLit(cells)) : ''}</div>
     ${sug ? (maj && maj.length ? '<div class="hint">다수결 제안 <button data-f43ok="1">이대로 확정</button></div>' : '<div class="hint">칸을 눌러 정하기</div>') : `<div class="hint">✓ 확정${fin.by ? ' · ' + esc(fin.by) : ''} <button data-f43del="1" title="최종 지우기">지우기</button></div>`}</div>`;
 }
+// 최종 코드: 코더 한 명의 분석 단위 칸 합치기(하위 문항 칸 합집합), 갈림 분류
+function rsMerged(its, g) { if (!its) return null; const got = g.list.filter((u) => its[u.id] && Array.isArray(its[u.id].cells) && its[u.id].cells.length); if (!got.length) return null; const set = new Set(got.flatMap((u) => its[u.id].cells)); if (set.size > 1) set.delete('X'); return { cells: CELL_ALL.filter((x) => set.has(x)), done: got.length, all: g.list.length }; }
+function rsClassify(by) {
+  const full = by.filter((x) => x && x.done === x.all);
+  const diff = new Set(); if (full.length >= 2) CELL_ALL.forEach((k) => { const n = full.filter((x) => x.cells.includes(k)).length; if (n && n < full.length) diff.add(k); });
+  // 다수결 제안: 다 코딩한 사람의 절반 넘게 고른 칸
+  const maj = full.length >= 2 ? CELL_ALL.filter((k) => full.filter((x) => x.cells.includes(k)).length * 2 > full.length) : [];
+  // 7요소(단계·소양) 비교: 누구는 있고 누구는 없는 요소
+  const ediff = []; if (full.length >= 2) { const es = full.map((x) => el7(x.cells)); EL7.forEach(([k]) => { const n = es.filter((e) => e.has(k)).length; if (n && n < es.length) ediff.push(k); }); }
+  const type = full.length < 2 ? '비교 불가' : ediff.length ? ediff.map(elName).join('·') + ' 다름' : diff.size ? '칸만 다름' : '일치';
+  const pri = full.length < 2 ? 3 : ediff.length ? 0 : diff.size ? 1 : 2;
+  const hasSt = ediff.some((k) => 'FCAI'.includes(k)), hasLi = ediff.some((k) => 'KRM'.includes(k));
+  const grp = pri ? type : ediff.includes('X') ? '해당없음 포함' : hasSt && hasLi ? '단계+소양 다름' : hasSt ? '단계만 다름' : '소양만 다름';
+  return { diff, dis: diff.size > 0, ediff, type, grp, pri, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj };
+}
 async function renderResults() {
+  if (RS.all) return renderResultsAll();
   const B = $('#resultsBody');
   if (!S.book) { B.innerHTML = '<p class="hint">위에서 목록을 고르세요.</p>'; return; }
   B.innerHTML = '<p class="hint">불러오는 중…</p>';
@@ -1580,21 +1596,8 @@ async function renderResults() {
   const map = auMap(units, isCur(), book), groups = [];
   const gi = new Map();
   units.forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
-  const merged = (c, g) => { const its = itemsOf(c); if (!its) return null; const got = g.list.filter((u) => its[u.id] && Array.isArray(its[u.id].cells) && its[u.id].cells.length); if (!got.length) return null; const set = new Set(got.flatMap((u) => its[u.id].cells)); if (set.size > 1) set.delete('X'); return { cells: CELL_ALL.filter((x) => set.has(x)), done: got.length, all: g.list.length }; };
-  const rows = groups.map((g) => {
-    const by = coders.map((c) => merged(c, g));
-    const full = by.filter((x) => x && x.done === x.all);
-    const diff = new Set(); if (full.length >= 2) CELL_ALL.forEach((k) => { const n = full.filter((x) => x.cells.includes(k)).length; if (n && n < full.length) diff.add(k); });
-    // 다수결 제안: 다 코딩한 사람의 절반 넘게 고른 칸
-    const maj = full.length >= 2 ? CELL_ALL.filter((k) => full.filter((x) => x.cells.includes(k)).length * 2 > full.length) : [];
-    // 7요소(단계·소양) 비교: 누구는 있고 누구는 없는 요소
-    const ediff = []; if (full.length >= 2) { const es = full.map((x) => el7(x.cells)); EL7.forEach(([k]) => { const n = es.filter((e) => e.has(k)).length; if (n && n < es.length) ediff.push(k); }); }
-    const type = full.length < 2 ? '비교 불가' : ediff.length ? ediff.map(elName).join('·') + ' 다름' : diff.size ? '칸만 다름' : '일치';
-    const pri = full.length < 2 ? 3 : ediff.length ? 0 : diff.size ? 1 : 2;
-    const hasSt = ediff.some((k) => 'FCAI'.includes(k)), hasLi = ediff.some((k) => 'KRM'.includes(k));
-    const grp = pri ? type : ediff.includes('X') ? '해당없음 포함' : hasSt && hasLi ? '단계+소양 다름' : hasSt ? '단계만 다름' : '소양만 다름';
-    return { g, by, diff, dis: diff.size > 0, ediff, type, grp, pri, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj, fin: FIN43.data.au[g.list[0].id] };
-  });
+  const merged = (c, g) => rsMerged(itemsOf(c), g);
+  const rows = groups.map((g) => { const by = coders.map((c) => merged(c, g)); return { g, by, ...rsClassify(by), fin: FIN43.data.au[g.list[0].id] }; });
   // 우선순위: 7요소가 다른 것 → 칸만 다른 것 → 일치 → 비교 불가. 같은 순위 안에서는 유형별로 모으고, 유형 안은 원래(쪽) 순서
   const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
   const gcount = {}; rows.forEach((x) => { gcount[x.grp] = (gcount[x.grp] || 0) + 1; });
@@ -1616,7 +1619,7 @@ async function renderResults() {
   const title = (g) => { const u = g.list[0]; return isCur() ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)'); };
   const pages = (g) => [...new Set(g.list.map((u) => u.page))];
   const where0 = (g) => (isCur() ? (g.list[0].std || '') : pages(g).map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'));
-  B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">${esc(bookName(book))}</span></h2>
+  B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">${esc(bookName(book))}</span></h2>${rsModeBar()}
     ${opened ? `<p class="note">${esc((r.who || coders).join('·'))} 결과를 보여 줘요. 하위 문항의 칸을 합친 값이에요(같은 칸은 한 번). 노란 칸은 사람마다 다른 칸이에요.</p>` : `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px">비교할 사람이 모두 '코딩 완료'를 누르기 전이라 <b>내 결과만</b> 보여요(독립 코딩 유지). 비교할 사람은 '비교·일치율' 탭에서 고를 수 있어요.</p>`}
     <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개${rows.length - nE - nCell - nSame ? ` · 비교 불가 ${rows.length - nE - nCell - nSame}개` : ''} <span class="hint">(위에서부터 순서대로 하면 돼요)</span></div>
     <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip big ${RS.grp ? '' : 'on'}" data-rgrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
@@ -1627,6 +1630,7 @@ async function renderResults() {
       ${shown.map(({ g, by, diff, dis, maj, fin, type, pri }) => `<tr class="${g.key === RS.sel ? 'on' : ''} ${dis ? 'dis' : ''}" data-rs="${esc(g.key)}"><td class="l"><div class="rs-t">${esc(title(g))}</div><div class="rs-ty p${pri}">${esc(type)}</div><div class="hint">${esc(where0(g))}${g.list.length > 1 ? ` · ${isCur() ? '조각' : '하위 문항'} ${g.list.length}개` : ''}</div></td>
         ${by.map((x) => `<td>${x ? `${mini43(x.cells, diff)}<div class="rs-sl">${esc(stLit(x.cells))}</div>${x.done < x.all ? `<div class="hint">${x.done}/${x.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}${opened ? `<td class="fin-c">${fin43(g.list[0].id, fin, maj)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${coders.length + 2}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
     </table></div><aside id="rsSide" class="rs-side"></aside></div>`;
+  bindModeBar(B);
   $('#rsDis').onchange = (e) => { RS.onlyDis = e.target.checked; renderResults(); };
   B.querySelectorAll('[data-rtype]').forEach((b) => b.onclick = () => { RS.type = b.dataset.rtype; RS.sel = null; renderResults(); });
   B.querySelectorAll('[data-rgrp]').forEach((b) => b.onclick = () => { RS.grp = b.dataset.rgrp; RS.type = ''; RS.sel = null; renderResults(); });
@@ -1673,6 +1677,129 @@ async function renderResults() {
     A.querySelectorAll('[data-gou]').forEach((a) => a.onclick = (e) => { e.preventDefault(); $('#tabs [data-tab=code]').click(); select(a.dataset.gou); });
     if ($('#rsX')) $('#rsX').onclick = () => A.classList.remove('open');
     if ($('#rsMemo')) $('#rsMemo').onchange = (e) => { const key = RS.sel && rows.find((x) => x.g.key === RS.sel).g.list[0].id; if (!key) return; FIN43.data.au[key] = { ...(FIN43.data.au[key] || { ids: ids(key), cells: [] }), memo: e.target.value, t: Date.now() }; saveFin43(); };
+  };
+  side();
+}
+
+// ───────── 최종 코드: 모든 목록을 내용 요소별로 모아 보기 ─────────
+const RA = { t: 0, cache: {}, fins: {}, ce: '', grp: '', type: '', sel: null, pg: 0, onlyTodo: false };
+// 내용 요소: 코딩 화면의 내용 요소(unitCE)를 씀. 자료 정리 그래프 네 가지는 하나로 묶음. 한 과제에 여럿이면 CE_PICK 순서로 하나
+const CE_GRP = { '줄기와 잎 그림': '도수분포표·그래프', '도수분포표': '도수분포표·그래프', '히스토그램': '도수분포표·그래프', '도수분포다각형': '도수분포표·그래프' };
+const CE_PICK = ['통계적 탐구', '산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '기타'];
+const CE_ORD = ['산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '통계적 탐구', '기타'];
+const ceOfG = (list) => { const s = new Set(list.flatMap((u) => unitCE(u)).map((c) => CE_GRP[c] || c)); return CE_PICK.find((c) => s.has(c)) || [...s][0] || '기타'; };
+const rsModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${RS.all ? '' : 'on'}" data-rall="0">이 목록만</button><button class="rs-chip big ${RS.all ? 'on' : ''}" data-rall="1">모든 목록 · 내용 요소별</button></div>`;
+const bindModeBar = (B) => B.querySelectorAll('[data-rall]').forEach((b) => b.onclick = () => { const v = b.dataset.rall === '1'; if (v === !!RS.all) return; RS.all = v; if (v) RA.t = 0; renderResults(); });
+async function renderResultsAll() {
+  const B = $('#resultsBody');
+  const ORD = ['이성식', '조상연', '김형준'];
+  const coders = [...S.cfg.coders].sort((x, y) => (ORD.indexOf(x) + 1 || 99) - (ORD.indexOf(y) + 1 || 99));
+  if (Date.now() - RA.t > 120000) {
+    B.innerHTML = `<h2>최종 코드 정하기</h2>${rsModeBar()}<p class="hint">모든 목록을 불러오는 중…</p>`; bindModeBar(B);
+    await Promise.all(S.cfg.books.map(async (id) => {
+      try {
+        const [u, r, F] = await Promise.all([getStore(`books/${id}/units.json`), api(`/api/codings?book=${encodeURIComponent(id)}&all=1${whoQ()}`), getStore(`final/${id}_43.json`)]);
+        RA.cache[id] = { units: (u.data && u.data.units) || [], r };
+        const d = (F && F.data) || { au: {} }; d.au ||= {}; RA.fins[id] = { book: id, data: d, etag: F && F.etag };
+      } catch {}
+    }));
+    RA.t = Date.now();
+  }
+  if (!RS.all) return;
+  const kinds = S.cfg.defaultKinds || ['main', 'intro'];
+  const rows = []; let closed = 0;
+  S.cfg.books.forEach((id) => {
+    const o = RA.cache[id]; if (!o) return;
+    if (!(o.r && o.r.opened)) { closed++; return; }
+    const cur = isCur(id), units = o.units.filter((u) => kinds.includes(u.kind || 'main'));
+    const map = auMap(units, cur, id), gi = new Map(), groups = [];
+    units.forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
+    groups.forEach((g) => {
+      const by = coders.map((c) => rsMerged(o.r.data && o.r.data[c] ? o.r.data[c].items || {} : null, g));
+      const u = g.list[0];
+      const title = cur ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)');
+      const text = cur ? (u.orig || u.summary || '') : [...new Set(g.list.map((x) => x.summary || ''))].join(' / ');
+      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: RA.fins[id].data.au[u.id] });
+    });
+  });
+  const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
+  const inC = (x) => !RA.ce || x.ce === RA.ce, inG = (x) => !RA.grp || x.grp === RA.grp;
+  const cnt = (f) => { const o = {}; rows.filter(f).forEach((x) => { o[x.k] = (o[x.k] || 0) + 1; }); return o; };
+  rows.forEach((x) => { x.k = x.ce; }); const ceAll = cnt(() => true); const ceDis = cnt((x) => x.pri <= 1);
+  rows.forEach((x) => { x.k = x.grp; }); const gcount = cnt(inC);
+  if (RA.grp && !gcount[RA.grp]) { RA.grp = ''; RA.type = ''; }
+  rows.forEach((x) => { x.k = x.type; }); const tcount = cnt((x) => inC(x) && inG(x)); const allT = cnt(() => true);
+  if (RA.type && !tcount[RA.type]) RA.type = '';
+  const tOrder = Object.keys(tcount).sort((a, b) => tcount[b] - tcount[a] || a.localeCompare(b, 'ko'));
+  const ceI = (c) => (CE_ORD.indexOf(c) + 1 || 99), ceList = [...CE_ORD, ...Object.keys(ceAll).filter((c) => !CE_ORD.includes(c))];
+  const sorted = [...rows].sort((a, b) => (a.pri > 1) - (b.pri > 1) || ceI(a.ce) - ceI(b.ce) || a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko'));
+  let shown = sorted.filter((x) => inC(x) && inG(x)); if (RA.type) shown = shown.filter((x) => x.type === RA.type);
+  if (RA.onlyTodo) shown = shown.filter((x) => !x.fin);
+  const LIMIT = 150, more = shown.length - LIMIT, view = shown.slice(0, LIMIT);
+  if (!view.some((x) => x.g.key === RA.sel)) { RA.sel = view.length ? view[0].g.key : null; RA.pg = 0; }
+  const nE = rows.filter((x) => x.pri === 0).length, nCell = rows.filter((x) => x.pri === 1).length, nSame = rows.filter((x) => x.pri === 2).length;
+  const fins = (f) => rows.filter((x) => f(x) && x.fin).length;
+  const cechip = (c) => { const d = fins((x) => x.ce === c && x.pri <= 1); return `<button class="rs-chip big p0 ${RA.ce === c ? 'on' : ''}" data-race="${esc(c)}">${esc(c)} <b>${ceDis[c] || 0}</b><span class="hint">/${ceAll[c]}</span>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const gchip = (gname) => { const d = fins((x) => inC(x) && x.grp === gname), pr = rows.find((x) => x.grp === gname).pri; return `<button class="rs-chip p${pr} ${RA.grp === gname ? 'on' : ''}" data-ragrp="${esc(gname)}">${esc(gname)} <b>${gcount[gname]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const tchip = (t) => { const d = fins((x) => inC(x) && inG(x) && x.type === t); return `<button class="rs-chip p${rows.find((x) => x.type === t).pri} ${RA.type === t ? 'on' : ''}" data-ratype="${esc(t)}">${esc(t)} <b>${tcount[t]}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const where0 = (x) => { const m = S.metas[x.book] || {}; return x.cur ? (x.g.list[0].std || '') : [...new Set(x.g.list.map((u) => u.page))].map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'); };
+  const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
+  B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
+    <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개 <span class="hint">(전체 ${rows.length}개${closed ? ` · 아직 안 열린 목록 ${closed}개는 빠짐` : ''})</span></div>
+    <div class="rs-chips"><span class="hint">⓪ 내용 요소</span><button class="rs-chip big ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${nE + nCell}</b><span class="hint">/${rows.length}</span></button>${ceList.filter((c) => ceAll[c]).map(cechip).join('')}</div>
+    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.filter(inC).length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
+    ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="hint">② 무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
+    <div class="bar">${RA.grp ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">숫자는 요소가 다른 과제 / 전체예요. 줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
+    <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">과제</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th class="fin-h">최종</th></tr>
+      ${view.map((x) => `<tr class="${x.g.key === RA.sel ? 'on' : ''} ${x.dis ? 'dis' : ''}" data-ra="${esc(x.g.key)}"><td class="l"><div class="hint">${esc(shortBook(x.book))}</div><div class="rs-t">${esc(x.title)}</div><div class="rs-ty p${x.pri}">${esc(x.type)}</div> <span class="rs-ty">${esc(x.ce)}</span><div class="hint">${esc(where0(x))}${x.g.list.length > 1 ? ` · ${x.cur ? '조각' : '하위 문항'} ${x.g.list.length}개` : ''}</div></td>
+        ${x.by.map((b) => `<td>${b ? `${mini43(b.cells, x.diff)}<div class="rs-sl">${esc(stLit(b.cells))}</div>${b.done < b.all ? `<div class="hint">${b.done}/${b.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}<td class="fin-c">${fin43(x.g.list[0].id, x.fin, x.maj)}</td></tr>`).join('') || `<tr><td colspan="${coders.length + 2}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
+      ${more > 0 ? `<tr><td colspan="${coders.length + 2}" class="hint">아래에 ${more}개가 더 있어요. 위에서 정하거나 묶음·유형을 골라 좁혀 보세요.</td></tr>` : ''}
+    </table></div><aside id="raSide" class="rs-side"></aside></div>`;
+  bindModeBar(B);
+  B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.ce = b.dataset.race; RA.grp = ''; RA.type = ''; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.grp = b.dataset.ragrp; RA.type = ''; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.type = b.dataset.ratype; RA.sel = null; renderResults(); });
+  $('#raTodo').onchange = (e) => { RA.onlyTodo = e.target.checked; renderResults(); };
+  const rowOf = (key) => rows.find((x) => x.g.list[0].id === key);
+  const F = (x) => RA.fins[x.book];
+  const save = (books) => Promise.all([...new Set(books)].map((b) => saveFin43(true, RA.fins[b])));
+  if ($('#raMaj')) $('#raMaj').onclick = async () => { const bs = []; let n = 0; shown.forEach((x) => { if (!x.fin && x.maj.length) { F(x).data.au[x.g.list[0].id] = { ids: x.g.list.map((u) => u.id), cells: x.maj, by: (S.coder || '') + '(다수결)', t: Date.now() }; bs.push(x.book); n++; } }); await save(bs); toast(`${n}개를 다수결로 채웠어요.`); renderResults(); };
+  const setF = (x, cells) => { const key = x.g.list[0].id, d = F(x).data; d.au[key] = { ...(d.au[key] || {}), ids: x.g.list.map((u) => u.id), cells, by: S.coder || '', t: Date.now() }; x.fin = d.au[key]; return saveFin43(true, F(x)); };
+  const onDel = (e) => { e.stopPropagation(); const key = e.currentTarget.closest('[data-fk]').dataset.fk, x = rowOf(key), d = F(x).data; delete d.au[key]; d.del = { ...(d.del || {}), [key]: Date.now() }; saveFin43(true, F(x)); renderResults(); };
+  const onF43 = (e) => {
+    e.stopPropagation(); const b = e.currentTarget, key = b.closest('[data-fk]').dataset.fk, x = rowOf(key);
+    const cur = new Set((F(x).data.au[key] || {}).cells || x.maj || []); const k = b.dataset.f43;
+    if (k === 'X') { const had = cur.has('X') && cur.size === 1; cur.clear(); if (!had) cur.add('X'); } else { cur.delete('X'); cur.has(k) ? cur.delete(k) : cur.add(k); }
+    setF(x, CELL_ALL.filter((c) => cur.has(c)));
+    const td = b.closest('td.fin-c'); td.innerHTML = fin43(key, x.fin, x.maj); bindFin(td);
+  };
+  const bindFin = (root) => {
+    root.querySelectorAll('[data-f43]').forEach((b) => b.onclick = onF43);
+    root.querySelectorAll('[data-f43del]').forEach((b) => b.onclick = onDel);
+    root.querySelectorAll('[data-f43ok]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); const x = rowOf(b.closest('[data-fk]').dataset.fk); setF(x, x.maj); renderResults(); });
+  };
+  bindFin(B);
+  B.querySelectorAll('[data-ra]').forEach((tr) => tr.onclick = () => { RA.sel = tr.dataset.ra; RA.pg = 0; B.querySelectorAll('[data-ra]').forEach((y) => y.classList.toggle('on', y === tr)); side(); });
+  const side = async () => {
+    const A = $('#raSide'); const x = view.find((y) => y.g.key === RA.sel); if (!A) return;
+    if (!x) { A.innerHTML = ''; return; }
+    A.classList.add('open');
+    const g = x.g, m = S.metas[x.book] || {}, key = g.list[0].id, fm = F(x).data.au[key] || {};
+    const head = `<div class="rs-sh"><b>${esc(x.title)}</b><button id="raX" class="rs-x" title="닫기">✕</button></div><div class="hint">${esc(bookName(x.book))} <a href="#" id="raGo">이 목록으로 가기</a></div>`;
+    const list = `<label class="hint">최종 메모</label><textarea id="raMemo" class="memo" rows="2" placeholder="왜 이렇게 정했는지 (회의 메모)">${esc(fm.memo || '')}</textarea>
+      <ol class="rs-sub">${g.list.map((u) => `<li>${esc(x.cur ? u.summary : `${u.task || ''} ${u.summary || ''}`)}</li>`).join('')}</ol>`;
+    const bind = () => {
+      if ($('#raX')) $('#raX').onclick = () => A.classList.remove('open');
+      $('#raGo').onclick = async (e) => { e.preventDefault(); RS.all = false; RS.grp = ''; RS.type = ''; await selectBook(x.book); RS.sel = g.key; renderResults(); };
+      $('#raMemo').onchange = (e) => { const d = F(x).data; d.au[key] = { ...(d.au[key] || { ids: g.list.map((u) => u.id), cells: [] }), memo: e.target.value, t: Date.now() }; saveFin43(true, F(x)); };
+      A.querySelectorAll('[data-rapg]').forEach((b) => b.onclick = () => { RA.pg = +b.dataset.rapg; side(); });
+    };
+    if (x.cur || !m.pages) { A.innerHTML = head + list; bind(); return; }
+    const ps = [...new Set(g.list.map((u) => u.page))]; RA.pg = Math.min(RA.pg, ps.length - 1); const pg = ps[RA.pg];
+    A.innerHTML = head + `${ps.length > 1 ? `<div class="rs-pgs">${ps.map((p, i) => `<button data-rapg="${i}" class="${i === RA.pg ? 'on' : ''}">${esc(m.pages[p].label)}쪽</button>`).join('')}</div>` : `<div class="hint">${esc(m.pages[pg].label)}쪽</div>`}
+      <div class="rs-stage"><img id="raImg" alt="${esc(m.pages[pg].label)}쪽">${g.list.filter((u) => u.page === pg && u.r).map((u) => `<div class="rs-box" style="left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%"></div>`).join('')}</div>` + list;
+    bind();
+    try { const url = await pageImage(x.book, m.pages[pg].file); const im = $('#raImg'); if (im && RA.sel === g.key) { im.src = url; im.onload = () => { const b = A.querySelector('.rs-box'); if (b) b.scrollIntoView({ block: 'center' }); }; } } catch { toast('쪽 이미지를 불러오지 못했습니다'); }
   };
   side();
 }
