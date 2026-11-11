@@ -1621,9 +1621,9 @@ async function renderResults() {
   const where0 = (g) => (isCur() ? (g.list[0].std || '') : pages(g).map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'));
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">${esc(bookName(book))}</span></h2>${rsModeBar()}
     ${opened ? `<p class="note">${esc((r.who || coders).join('·'))} 결과를 보여 줘요. 하위 문항의 칸을 합친 값이에요(같은 칸은 한 번). 노란 칸은 사람마다 다른 칸이에요.</p>` : `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px">비교할 사람이 모두 '코딩 완료'를 누르기 전이라 <b>내 결과만</b> 보여요(독립 코딩 유지). 비교할 사람은 '비교·일치율' 탭에서 고를 수 있어요.</p>`}
-    <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개${rows.length - nE - nCell - nSame ? ` · 비교 불가 ${rows.length - nE - nCell - nSame}개` : ''} <span class="hint">(위에서부터 순서대로 하면 돼요)</span></div>
-    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip big ${RS.grp ? '' : 'on'}" data-rgrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
-    ${RS.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="hint">② 무엇이 다른가</span><button class="rs-chip ${RS.type ? '' : 'on'}" data-rtype="">${esc(RS.grp)} 전체 <b>${gcount[RS.grp]}</b></button>${tOrder.map(chip).join('')}</div>` : ''}
+    ${rsSumHtml(nE, nCell, nSame, nFin, rows.length, rows.length - nE - nCell - nSame ? `비교 불가 ${rows.length - nE - nCell - nSame}개` : '')}
+    <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RS.grp ? '' : 'on'}" data-rgrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
+    ${RS.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RS.type ? '' : 'on'}" data-rtype="">${esc(RS.grp)} 전체 <b>${gcount[RS.grp]}</b></button>${tOrder.map(chip).join('')}</div>` : ''}</div>
     ${opened && RS.grp ? `<div class="bar"><b>${esc(RS.type || RS.grp)}</b><button id="rsTypeMaj">보이는 과제의 빈 최종을 다수결로 채우기</button><span class="hint">채운 뒤 표에서 다른 것만 고치면 돼요</span></div>` : ''}
     <div class="bar"><label><input type="checkbox" id="rsDis" ${RS.onlyDis ? 'checked' : ''}> 사람마다 다른 것만 (${rows.filter((x) => x.dis).length}/${rows.length})</label>${opened ? `<label><input type="checkbox" id="rsTodo" ${RS.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${nFin}/${rows.length}</b><button id="rsMaj">다수결로 빈 최종 채우기</button>` : ''}<span class="hint">줄을 누르면 오른쪽에 ${isCur() ? '문장 조각' : '교과서 쪽'}이 나와요</span></div>
     <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">${isCur() ? '교육과정 문장' : '교과서 과제'}</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}${opened ? '<th class="fin-h">최종</th>' : ''}</tr>
@@ -1688,6 +1688,13 @@ const CE_GRP = { '줄기와 잎 그림': '도수분포표·그래프', '도수�
 const CE_PICK = ['통계적 탐구', '산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '기타'];
 const CE_ORD = ['산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '통계적 탐구', '기타'];
 const ceOfG = (list) => { const s = new Set(list.flatMap((u) => unitCE(u)).map((c) => CE_GRP[c] || c)); return CE_PICK.find((c) => s.has(c)) || [...s][0] || '기타'; };
+// 최종 코드 위쪽 요약 칸(요소 다름·칸만 다름·일치·최종 확정)
+const rsSumHtml = (nE, nCell, nSame, nFin, total, extra = '') => `<div class="rs-stats">
+  <div class="rs-stat p0"><span>요소가 다른 과제</span><b>${nE}</b><small>F·C·A·I·K·R·소통 중 하나라도 다름 · 먼저</small></div>
+  <div class="rs-stat p1"><span>칸만 다름</span><b>${nCell}</b><small>요소는 같고 4×3 칸만 다름 · 그다음</small></div>
+  <div class="rs-stat p2"><span>일치</span><b>${nSame}</b><small>마지막에 다수결로 한 번에</small></div>
+  <div class="rs-stat fin"><span>최종 확정</span><b>${nFin}<small> / ${total}</small></b><div class="rs-bar"><i style="width:${total ? (nFin / total * 100).toFixed(1) : 0}%"></i></div>${extra ? `<small>${extra}</small>` : ''}</div>
+</div>`;
 const rsModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${RS.all ? '' : 'on'}" data-rall="0">이 목록만</button><button class="rs-chip big ${RS.all ? 'on' : ''}" data-rall="1">모든 목록 한꺼번에</button></div>`;
 const bindModeBar = (B) => B.querySelectorAll('[data-rall]').forEach((b) => b.onclick = () => { const v = b.dataset.rall === '1'; if (v === !!RS.all) return; RS.all = v; if (v) RA.t = 0; renderResults(); });
 async function renderResultsAll() {
@@ -1748,10 +1755,10 @@ async function renderResultsAll() {
   const where0 = (x) => { const m = S.metas[x.book] || {}; return x.cur ? (x.g.list[0].std || '') : [...new Set(x.g.list.map((u) => u.page))].map((p) => (m.pages && m.pages[p] ? m.pages[p].label : p + 1) + '쪽').join('·'); };
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
-    <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개 <span class="hint">(전체 ${rows.length}개${closed ? ` · 아직 안 열린 목록 ${closed}개는 빠짐` : ''})</span></div>
-    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
-    ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="hint">② 무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
-    <div class="rs-chips"><span class="hint">③ 내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div>
+    ${rsSumHtml(nE, nCell, nSame, fins(() => true), rows.length, closed ? `아직 안 열린 목록 ${closed}개는 빠짐` : '')}
+    <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
+    ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
+    <div class="rs-chips"><span class="rs-lab"><i>3</i>내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div></div>
     <div class="bar">${RA.grp ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
     <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">과제</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th class="fin-h">최종</th></tr>
       ${view.map((x) => `<tr class="${x.g.key === RA.sel ? 'on' : ''} ${x.dis ? 'dis' : ''}" data-ra="${esc(x.g.key)}"><td class="l"><div class="hint">${esc(shortBook(x.book))}</div><div class="rs-t">${esc(x.title)}</div><div class="rs-ty p${x.pri}">${esc(x.type)}</div> <span class="rs-ty">${esc(x.ce)}</span><div class="hint">${esc(where0(x))}${x.g.list.length > 1 ? ` · ${x.cur ? '조각' : '하위 문항'} ${x.g.list.length}개` : ''}</div></td>
