@@ -1531,7 +1531,7 @@ function ovRows(num = false) {
 function exportOverviewCSV() { download(`일치율_한눈에보기_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(ovRows())); }
 
 // ───────── 과제별 결과: 분석 단위(교육과정 원래 문장·교과서 큰 과제)마다 코더별 4×3 ─────────
-const RS = { sel: null, onlyDis: false, pg: 0, type: '' };
+const RS = { sel: null, onlyDis: false, pg: 0, type: '', grp: '' };
 // 7요소: 단계 F·C·A·I + 소양 K·R·소통(M). 칸 코드 'AC'의 C는 소통 → M
 const EL7 = [['F', 'F'], ['C', 'C'], ['A', 'A'], ['I', 'I'], ['K', 'K'], ['R', 'R'], ['M', '소통'], ['X', '해당없음']];
 const el7 = (cells) => { const o = new Set(); (cells || []).forEach((x) => { if (x === 'X') o.add('X'); else if (x.length === 2) { o.add(x[0]); o.add(x[1] === 'C' ? 'M' : x[1]); } }); return o; };
@@ -1591,17 +1591,25 @@ async function renderResults() {
     const ediff = []; if (full.length >= 2) { const es = full.map((x) => el7(x.cells)); EL7.forEach(([k]) => { const n = es.filter((e) => e.has(k)).length; if (n && n < es.length) ediff.push(k); }); }
     const type = full.length < 2 ? '비교 불가' : ediff.length ? ediff.map(elName).join('·') + ' 다름' : diff.size ? '칸만 다름' : '일치';
     const pri = full.length < 2 ? 3 : ediff.length ? 0 : diff.size ? 1 : 2;
-    return { g, by, diff, dis: diff.size > 0, ediff, type, pri, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj, fin: FIN43.data.au[g.list[0].id] };
+    const hasSt = ediff.some((k) => 'FCAI'.includes(k)), hasLi = ediff.some((k) => 'KRM'.includes(k));
+    const grp = pri ? type : ediff.includes('X') ? '해당없음 포함' : hasSt && hasLi ? '단계+소양 다름' : hasSt ? '단계만 다름' : '소양만 다름';
+    return { g, by, diff, dis: diff.size > 0, ediff, type, grp, pri, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj, fin: FIN43.data.au[g.list[0].id] };
   });
   // 우선순위: 7요소가 다른 것 → 칸만 다른 것 → 일치 → 비교 불가. 같은 순위 안에서는 유형별로 모으고, 유형 안은 원래(쪽) 순서
-  const tcount = {}; rows.forEach((x) => { tcount[x.type] = (tcount[x.type] || 0) + 1; });
-  const tOrder = Object.keys(tcount).sort((a, b) => { const pa = rows.find((x) => x.type === a).pri, pb = rows.find((x) => x.type === b).pri; return pa - pb || tcount[b] - tcount[a] || a.localeCompare(b, 'ko'); });
+  const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
+  const gcount = {}; rows.forEach((x) => { gcount[x.grp] = (gcount[x.grp] || 0) + 1; });
+  if (RS.grp && !gcount[RS.grp]) { RS.grp = ''; RS.type = ''; }
+  const inG = (x) => !RS.grp || x.grp === RS.grp;
+  const tcount = {}; rows.filter(inG).forEach((x) => { tcount[x.type] = (tcount[x.type] || 0) + 1; });
+  const tOrder = Object.keys(tcount).sort((a, b) => tcount[b] - tcount[a] || a.localeCompare(b, 'ko'));
   if (RS.type && !tcount[RS.type]) RS.type = '';
-  const sorted = rows.map((x, i) => ({ x, i })).sort((a, b) => a.x.pri - b.x.pri || tOrder.indexOf(a.x.type) - tOrder.indexOf(b.x.type) || a.i - b.i).map((o) => o.x);
-  let shown = RS.type ? sorted.filter((x) => x.type === RS.type) : sorted;
+  const allT = {}; rows.forEach((x) => { allT[x.type] = (allT[x.type] || 0) + 1; });
+  const sorted = rows.map((x, i) => ({ x, i })).sort((a, b) => a.x.pri - b.x.pri || GORD.indexOf(a.x.grp) - GORD.indexOf(b.x.grp) || allT[b.x.type] - allT[a.x.type] || a.x.type.localeCompare(b.x.type, 'ko') || a.i - b.i).map((o) => o.x);
+  let shown = sorted.filter(inG); if (RS.type) shown = shown.filter((x) => x.type === RS.type);
   shown = RS.onlyDis ? shown.filter((x) => x.dis) : RS.onlyTodo ? shown.filter((x) => !x.fin) : shown;
   const nE = rows.filter((x) => x.pri === 0).length, nCell = rows.filter((x) => x.pri === 1).length, nSame = rows.filter((x) => x.pri === 2).length;
-  const chip = (t) => { const n = tcount[t], d = rows.filter((x) => x.type === t && x.fin).length; return `<button class="rs-chip p${rows.find((x) => x.type === t).pri} ${RS.type === t ? 'on' : ''}" data-rtype="${esc(t)}">${esc(t)} <b>${n}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const chip = (t) => { const n = tcount[t], d = rows.filter((x) => inG(x) && x.type === t && x.fin).length; return `<button class="rs-chip p${rows.find((x) => x.type === t).pri} ${RS.type === t ? 'on' : ''}" data-rtype="${esc(t)}">${esc(t)} <b>${n}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
+  const gchip = (gname) => { const n = gcount[gname], d = rows.filter((x) => x.grp === gname && x.fin).length, pr = rows.find((x) => x.grp === gname).pri; return `<button class="rs-chip big p${pr} ${RS.grp === gname ? 'on' : ''}" data-rgrp="${esc(gname)}">${esc(gname)} <b>${n}</b>${d ? ` <span class="hint">(정함 ${d})</span>` : ''}</button>`; };
   const nFin = rows.filter((x) => x.fin).length;
   if (!shown.some((x) => x.g.key === RS.sel)) { RS.sel = shown.length ? shown[0].g.key : null; RS.pg = 0; }
   const m = S.metas[book] || {};
@@ -1611,8 +1619,9 @@ async function renderResults() {
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">${esc(bookName(book))}</span></h2>
     ${opened ? `<p class="note">${esc((r.who || coders).join('·'))} 결과를 보여 줘요. 하위 문항의 칸을 합친 값이에요(같은 칸은 한 번). 노란 칸은 사람마다 다른 칸이에요.</p>` : `<p class="note" style="border-left:4px solid var(--bad);padding-left:8px">비교할 사람이 모두 '코딩 완료'를 누르기 전이라 <b>내 결과만</b> 보여요(독립 코딩 유지). 비교할 사람은 '비교·일치율' 탭에서 고를 수 있어요.</p>`}
     <div class="rs-sum"><b>요소(F·C·A·I·K·R·소통)가 다른 과제 ${nE}개</b> · 칸만 다름 ${nCell}개 · 일치 ${nSame}개${rows.length - nE - nCell - nSame ? ` · 비교 불가 ${rows.length - nE - nCell - nSame}개` : ''} <span class="hint">(위에서부터 순서대로 하면 돼요)</span></div>
-    <div class="rs-chips"><button class="rs-chip ${RS.type ? '' : 'on'}" data-rtype="">전체 <b>${rows.length}</b></button>${tOrder.map(chip).join('')}</div>
-    ${opened && RS.type ? `<div class="bar"><b>유형: ${esc(RS.type)}</b><button id="rsTypeMaj">이 유형의 빈 최종을 다수결로 채우기</button><span class="hint">채운 뒤 표에서 다른 것만 고치면 돼요</span></div>` : ''}
+    <div class="rs-chips"><span class="hint">① 큰 묶음</span><button class="rs-chip big ${RS.grp ? '' : 'on'}" data-rgrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
+    ${RS.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="hint">② 무엇이 다른가</span><button class="rs-chip ${RS.type ? '' : 'on'}" data-rtype="">${esc(RS.grp)} 전체 <b>${gcount[RS.grp]}</b></button>${tOrder.map(chip).join('')}</div>` : ''}
+    ${opened && RS.grp ? `<div class="bar"><b>${esc(RS.type || RS.grp)}</b><button id="rsTypeMaj">보이는 과제의 빈 최종을 다수결로 채우기</button><span class="hint">채운 뒤 표에서 다른 것만 고치면 돼요</span></div>` : ''}
     <div class="bar"><label><input type="checkbox" id="rsDis" ${RS.onlyDis ? 'checked' : ''}> 사람마다 다른 것만 (${rows.filter((x) => x.dis).length}/${rows.length})</label>${opened ? `<label><input type="checkbox" id="rsTodo" ${RS.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${nFin}/${rows.length}</b><button id="rsMaj">다수결로 빈 최종 채우기</button>` : ''}<span class="hint">줄을 누르면 오른쪽에 ${isCur() ? '문장 조각' : '교과서 쪽'}이 나와요</span></div>
     <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">${isCur() ? '교육과정 문장' : '교과서 과제'}</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}${opened ? '<th class="fin-h">최종</th>' : ''}</tr>
       ${shown.map(({ g, by, diff, dis, maj, fin, type, pri }) => `<tr class="${g.key === RS.sel ? 'on' : ''} ${dis ? 'dis' : ''}" data-rs="${esc(g.key)}"><td class="l"><div class="rs-t">${esc(title(g))}</div><div class="rs-ty p${pri}">${esc(type)}</div><div class="hint">${esc(where0(g))}${g.list.length > 1 ? ` · ${isCur() ? '조각' : '하위 문항'} ${g.list.length}개` : ''}</div></td>
@@ -1620,7 +1629,8 @@ async function renderResults() {
     </table></div><aside id="rsSide" class="rs-side"></aside></div>`;
   $('#rsDis').onchange = (e) => { RS.onlyDis = e.target.checked; renderResults(); };
   B.querySelectorAll('[data-rtype]').forEach((b) => b.onclick = () => { RS.type = b.dataset.rtype; RS.sel = null; renderResults(); });
-  if ($('#rsTypeMaj')) $('#rsTypeMaj').onclick = () => { let n = 0; rows.forEach((x) => { if (x.type === RS.type && !x.fin && x.maj.length) { FIN43.data.au[x.g.list[0].id] = { ids: x.g.list.map((u) => u.id), cells: x.maj, by: (S.coder || '') + '(다수결)', t: Date.now() }; n++; } }); saveFin43().then(renderResults); toast(`'${RS.type}' ${n}개를 다수결로 채웠어요.`); };
+  B.querySelectorAll('[data-rgrp]').forEach((b) => b.onclick = () => { RS.grp = b.dataset.rgrp; RS.type = ''; RS.sel = null; renderResults(); });
+  if ($('#rsTypeMaj')) $('#rsTypeMaj').onclick = () => { let n = 0; shown.forEach((x) => { if (!x.fin && x.maj.length) { FIN43.data.au[x.g.list[0].id] = { ids: x.g.list.map((u) => u.id), cells: x.maj, by: (S.coder || '') + '(다수결)', t: Date.now() }; n++; } }); saveFin43().then(renderResults); toast(`${n}개를 다수결로 채웠어요.`); };
   if ($('#rsTodo')) $('#rsTodo').onchange = (e) => { RS.onlyTodo = e.target.checked; renderResults(); };
   const ids = (key) => (rows.find((x) => x.g.list[0].id === key) || { g: { list: [] } }).g.list.map((u) => u.id);
   const setF = (key, cells) => { FIN43.data.au[key] = { ...(FIN43.data.au[key] || {}), ids: ids(key), cells, by: S.coder || '', t: Date.now() }; saveFin43(); };

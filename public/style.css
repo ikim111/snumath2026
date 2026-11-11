@@ -488,3 +488,4 @@ table.mini43.fin button.fx.on { background: #cfe8d6; }
 .rs-ty { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; margin: 2px 0; background: #eef1f4; }
 .rs-ty.p0 { background: #fff1c2; }
 .rs-ty.p1 { background: #f3f3f3; color: #666; }
+.rs-chip.big { font-size: 14px; padding: 4px 12px; }
