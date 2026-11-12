@@ -1684,7 +1684,14 @@ async function renderResults() {
 }
 
 // ───────── 최종 코드: 모든 목록을 내용 요소별로 모아 보기 ─────────
-const RA = { t: 0, cache: {}, fins: {}, ce: '', grp: '', type: '', sel: null, pg: 0, onlyTodo: false };
+const RA = { t: 0, cache: {}, fins: {}, ce: '', grp: '', type: '', sel: null, pg: 0, onlyTodo: false, chk: '' };
+// 규칙 점검(11/11 합의 규칙): 최종 코드(없으면 다수결)가 규칙과 어긋나 보이는 과제. 낱말로 찾으니 후보일 뿐, 눈으로 확인
+const RS_CHECKS = [
+  { id: 'r5ir', name: '두 집단 상대 비교인데 IR 없음', rule: '규칙 5: "상대적으로 무엇이 더 많다" = IR',
+    test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /상대적|더 많|더 높|더 무거|많은지|높은 반|많은 반|무거운|키 큰|비교하기|분포 비교|상대 비교/.test(x.text) && !/O,?X|OX|참거짓|용도|총합/.test(x.text) && !c.includes('IR') },
+  { id: 'r5ar', name: '분포 치우침·특징 비교인데 AR 없음', rule: '규칙 5: "오른쪽으로 치우쳐 있다" = AR',
+    test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /치우|모양|특징|분포를 비교|분포 비교|퍼져/.test(x.text) && !c.includes('AR') },
+];
 // 내용 요소: 코딩 화면의 내용 요소(unitCE)를 씀. 자료 정리 그래프 네 가지는 하나로 묶음. 한 과제에 여럿이면 CE_PICK 순서로 하나
 const CE_GRP = { '줄기와 잎 그림': '도수분포표·그래프', '도수분포표': '도수분포표·그래프', '히스토그램': '도수분포표·그래프', '도수분포다각형': '도수분포표·그래프' };
 const CE_PICK = ['통계적 탐구', '산점도·상관관계', '산포도', '상대도수', '대푯값', '상자그림', '도수분포표·그래프', '기타'];
@@ -1745,7 +1752,10 @@ async function renderResultsAll() {
   const tOrder = Object.keys(tcount).sort((a, b) => tcount[b] - tcount[a] || a.localeCompare(b, 'ko'));
   const ceI = (c) => (CE_ORD.indexOf(c) + 1 || 99), ceList = [...CE_ORD, ...Object.keys(ceAll).filter((c) => !CE_ORD.includes(c))];
   const sorted = [...rows].sort((a, b) => a.pri - b.pri || GORD.indexOf(a.grp) - GORD.indexOf(b.grp) || (tcount[b.type] || 0) - (tcount[a.type] || 0) || allT[b.type] - allT[a.type] || a.type.localeCompare(b.type, 'ko') || ceI(a.ce) - ceI(b.ce));
-  let shown = sorted.filter((x) => inG(x) && inT(x) && inC(x));
+  const cellsOf = (x) => (x.fin && x.fin.cells) || x.maj || [];
+  rows.forEach((x) => { x.chk = RS_CHECKS.filter((c) => c.test(x, cellsOf(x))).map((c) => c.id); });
+  const chkN = Object.fromEntries(RS_CHECKS.map((c) => [c.id, rows.filter((x) => x.chk.includes(c.id)).length]));
+  let shown = RA.chk ? sorted.filter((x) => x.chk.includes(RA.chk)) : sorted.filter((x) => inG(x) && inT(x) && inC(x));
   if (RA.onlyTodo) shown = shown.filter((x) => !x.fin);
   const LIMIT = 150, more = shown.length - LIMIT, view = shown.slice(0, LIMIT);
   if (!view.some((x) => x.g.key === RA.sel)) { RA.sel = view.length ? view[0].g.key : null; RA.pg = 0; }
@@ -1758,6 +1768,7 @@ async function renderResultsAll() {
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
     ${rsSumHtml(nE, nCell, nSame, fins(() => true), rows.length, closed ? `아직 안 열린 목록 ${closed}개는 빠짐` : '')}
+    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">규칙 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · 낱말로 찾은 후보라 눈으로 확인하세요 · 점검 중에는 아래 1·2·3 고르기가 꺼져요</span>` : ''}</div></div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
     ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
     <div class="rs-chips"><span class="rs-lab"><i>3</i>내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div></div>
@@ -1768,9 +1779,10 @@ async function renderResultsAll() {
       ${more > 0 ? `<tr><td colspan="${coders.length + 2}" class="hint">아래에 ${more}개가 더 있어요. 위에서 정하거나 묶음·유형을 골라 좁혀 보세요.</td></tr>` : ''}
     </table></div><aside id="raSide" class="rs-side"></aside></div>`;
   bindModeBar(B);
-  B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.ce = b.dataset.race; RA.sel = null; renderResults(); });
-  B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.grp = b.dataset.ragrp; RA.type = ''; RA.ce = ''; RA.sel = null; renderResults(); });
-  B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.type = b.dataset.ratype; RA.ce = ''; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.ce = b.dataset.race; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.grp = b.dataset.ragrp; RA.type = ''; RA.ce = ''; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-rachk]').forEach((b) => b.onclick = () => { RA.chk = b.dataset.rachk; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.type = b.dataset.ratype; RA.ce = ''; RA.sel = null; renderResults(); });
   $('#raTodo').onchange = (e) => { RA.onlyTodo = e.target.checked; renderResults(); };
   const rowOf = (key) => rows.find((x) => x.g.list[0].id === key);
   const F = (x) => RA.fins[x.book];
@@ -1819,9 +1831,12 @@ async function renderResultsAll() {
 // ───────── 묶음: 어떤 문항(박스)을 한 과제(분석 단위)로 묶었는지 보고 고치기 ─────────
 // 자동 묶음 = 교과서는 같은 과제 번호(하위 문항 (1)(2) 앞까지)+붙은 쪽, 교육과정은 같은 원래 문장.
 // 직접 묶음 = u.aug(묶음 이름). 떼어 낸 문항은 자기만의 aug를 가짐.
-const GR = { sel: new Set(), onlyCE: '', onlyMulti: false };
+const GR = { sel: new Set(), onlyCE: '', onlyMulti: false, all: false, man: '' };
+const grModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${GR.all ? '' : 'on'}" data-grall0="0">이 목록 (고치기)</button><button class="rs-chip big ${GR.all ? 'on' : ''}" data-grall0="1">모든 목록 한꺼번에 (보기)</button></div>`;
+const bindGrMode = (B) => B.querySelectorAll('[data-grall0]').forEach((b) => b.onclick = () => { GR.all = b.dataset.grall0 === '1'; renderGroups(); });
 async function renderGroups() {
   const B = $('#groupsBody'); if (!B) return;
+  if (GR.all) return renderGroupsAll();
   if (!S.book) { B.innerHTML = '<p class="hint">위에서 목록을 고르세요.</p>'; return; }
   const book = S.book, cur = isCur(), m = S.metas[book] || {};
   let F = null; try { F = await getStore(`final/${book}_43.json`); } catch {}
@@ -1840,7 +1855,7 @@ async function renderGroups() {
   if (GR.onlyMulti) shown = shown.filter((g) => g.list.length > 1);
   const nMan = groups.filter((g) => g.list.some((u) => u.aug)).length;
   const finWarn = (g) => { const f = fin[g.list[0].id]; const ids = g.list.map((u) => u.id).sort().join(); const stale = Object.entries(fin).filter(([k, v]) => v && Array.isArray(v.ids) && v.ids.some((id) => g.list.some((u) => u.id === id)) && v.ids.slice().sort().join() !== ids); return f && Array.isArray(f.ids) && f.ids.slice().sort().join() === ids ? '' : stale.length || (f && f.ids && f.ids.slice().sort().join() !== ids) ? '<span class="gr-warn">묶음이 바뀜 · 최종 코드 다시 확인</span>' : ''; };
-  B.innerHTML = `<h2>묶음 확인 <span class="hint">${esc(bookName(book))}</span></h2>
+  B.innerHTML = `<h2>묶음 확인 <span class="hint">${esc(bookName(book))}</span></h2>${grModeBar()}
     <p class="note">한 과제(분석 단위)로 묶인 문항들이에요. 일치도와 결과는 이 묶음마다 하위 문항의 칸을 합쳐서 셉니다. 자동 묶음: ${cur ? '같은 원래 문장' : '같은 과제 번호((1)(2) 앞까지)이고 붙은 쪽'}. 문항을 고른 뒤 아래 버튼으로 묶거나 떼어 내세요.</p>
     <div class="rs-stats">
       <div class="rs-stat"><span>과제(분석 단위)</span><b>${groups.length}</b><small>문항 ${units.length}개</small></div>
@@ -1854,6 +1869,7 @@ async function renderGroups() {
       <div class="gr-head"><label><input type="checkbox" data-grall="${esc(g.key)}" ${g.list.every((u) => GR.sel.has(u.id)) ? 'checked' : ''}> <b>${esc(cur ? (g.list[0].orig || g.list[0].summary || '') : (taskBase(g.list[0].task) || g.list[0].summary || '(과제 번호 없음)'))}</b></label>
         <span class="rs-ty">${esc(ceG(g))}</span><span class="rs-ty ${man ? 'p0' : ''}">${man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${g.list.length}개 · ${esc([...new Set(g.list.map(pgl))].join('·'))}</span>${finWarn(g)}</div>
       <ol class="gr-items">${g.list.map((u) => `<li><label><input type="checkbox" data-gru="${u.id}" ${GR.sel.has(u.id) ? 'checked' : ''}> <span class="gr-task">${esc(cur ? (u.task || '') : (u.task || ''))}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(u))}${(u.kind || 'main') !== 'main' ? ' · ' + esc(KINDS[u.kind] || u.kind) : ''}</span></label></li>`).join('')}</ol></div>`; }).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div>`;
+  bindGrMode(B);
   const upd = () => { $('#grN').textContent = `고른 문항 ${GR.sel.size}개`; };
   B.querySelectorAll('[data-gru]').forEach((c) => c.onchange = () => { c.checked ? GR.sel.add(c.dataset.gru) : GR.sel.delete(c.dataset.gru); upd(); });
   B.querySelectorAll('[data-grall]').forEach((c) => c.onchange = () => { const g = groups.find((x) => x.key === c.dataset.grall); g.list.forEach((u) => (c.checked ? GR.sel.add(u.id) : GR.sel.delete(u.id))); c.closest('.gr-card').querySelectorAll('[data-gru]').forEach((x) => { x.checked = c.checked; }); upd(); });
@@ -1865,6 +1881,36 @@ async function renderGroups() {
   $('#grSplit').onclick = () => { const us = picked(); if (!us.length) return toast('뗄 문항을 고르세요.'); us.forEach((u) => { u.aug = 's' + u.id; markDirty(u); }); done(`${us.length}개 문항을 각각 따로 떼었어요.`); };
   $('#grAuto').onclick = () => { const us = picked().filter((u) => u.aug); if (!us.length) return toast('직접 묶음인 문항을 고르세요.'); us.forEach((u) => { delete u.aug; markDirty(u); }); done(`${us.length}개 문항을 자동 묶음으로 되돌렸어요.`); };
   $('#grClear').onclick = () => { GR.sel.clear(); renderGroups(); };
+}
+
+// 모든 목록의 묶음을 한꺼번에 보기(2개 이상 묶인 과제만). 고치기는 '이 목록'에서
+async function renderGroupsAll() {
+  const B = $('#groupsBody');
+  B.innerHTML = `<h2>묶음 확인 <span class="hint">모든 목록</span></h2>${grModeBar()}<p class="hint">모든 목록을 불러오는 중…</p>`; bindGrMode(B);
+  const kinds = S.cfg.defaultKinds || ['main', 'intro'];
+  const all = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/units.json`).then((u) => [id, (u.data && u.data.units) || []]).catch(() => [id, []])));
+  if (!GR.all) return;
+  const G = [];
+  all.forEach(([id, us]) => {
+    const cur = isCur(id), m = S.metas[id] || {}, units = us.filter((u) => kinds.includes(u.kind || 'main'));
+    const map = auMap(units, cur, id), gi = new Map(), groups = [];
+    [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
+    groups.forEach((g) => { if (g.list.length < 2) return; G.push({ book: id, cur, m, g, ce: ceOfG(g.list), man: g.list.some((u) => u.aug) }); });
+  });
+  const ces = [...new Set(G.map((x) => x.ce))];
+  let shown = G; if (GR.onlyCE) shown = shown.filter((x) => x.ce === GR.onlyCE); if (GR.man) shown = shown.filter((x) => (GR.man === 'man') === x.man);
+  const pgl = (x, u) => (x.cur ? (u.std || '') : x.m.pages && x.m.pages[u.page] ? x.m.pages[u.page].label + '쪽' : '');
+  B.innerHTML = `<h2>묶음 확인 <span class="hint">모든 목록</span></h2>${grModeBar()}
+    <p class="note">2개 이상의 문항이 한 과제로 묶인 것만 보여요. 고치려면 그 목록을 고른 뒤 '이 목록 (고치기)'에서 하세요.</p>
+    <div class="rs-stats"><div class="rs-stat"><span>2개 이상 묶인 과제</span><b>${G.length}</b><small>문항 ${G.reduce((a, x) => a + x.g.list.length, 0)}개</small></div><div class="rs-stat p0"><span>직접 묶음</span><b>${G.filter((x) => x.man).length}</b><small>묶음 탭에서 고친 것</small></div><div class="rs-stat"><span>자동 묶음</span><b>${G.filter((x) => !x.man).length}</b><small>같은 과제 번호·원래 문장</small></div></div>
+    <div class="rs-filter"><div class="rs-chips"><span class="rs-lab">묶은 방법</span>${[['', '전체'], ['man', '직접 묶음'], ['auto', '자동 묶음']].map(([k, n]) => `<button class="rs-chip ${GR.man === k ? 'on' : ''}" data-grman="${k}">${n} <b>${k ? G.filter((x) => (k === 'man') === x.man).length : G.length}</b></button>`).join('')}</div>
+    <div class="rs-chips"><span class="rs-lab">내용 요소</span><button class="rs-chip ${GR.onlyCE ? '' : 'on'}" data-grce="">전체</button>${ces.map((c) => `<button class="rs-chip ${GR.onlyCE === c ? 'on' : ''}" data-grce="${esc(c)}">${esc(c)} <b>${G.filter((x) => x.ce === c).length}</b></button>`).join('')}</div></div>
+    <div class="gr-list">${shown.map((x) => `<div class="gr-card multi"><div class="hint">${esc(bookName(x.book))}</div><div class="gr-head"><b>${esc(x.cur ? (x.g.list[0].orig || x.g.list[0].summary || '') : (taskBase(x.g.list[0].task) || x.g.list[0].summary || ''))}</b><span class="rs-ty">${esc(x.ce)}</span><span class="rs-ty ${x.man ? 'p0' : ''}">${x.man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${x.g.list.length}개</span> <a href="#" data-grgo="${esc(x.book)}">이 목록에서 고치기</a></div>
+      <ol class="gr-items">${x.g.list.map((u) => `<li><span class="gr-task">${esc(u.task || '')}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(x, u))}</span></li>`).join('')}</ol></div>`).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div>`;
+  bindGrMode(B);
+  B.querySelectorAll('[data-grman]').forEach((b) => b.onclick = () => { GR.man = b.dataset.grman; renderGroups(); });
+  B.querySelectorAll('[data-grce]').forEach((b) => b.onclick = () => { GR.onlyCE = b.dataset.grce; renderGroups(); });
+  B.querySelectorAll('[data-grgo]').forEach((a) => a.onclick = async (e) => { e.preventDefault(); GR.all = false; await selectBook(a.dataset.grgo); renderGroups(); });
 }
 
 // ───────── 엑셀(.xlsx) 내보내기: SheetJS를 누를 때만 불러옴 ─────────
