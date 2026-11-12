@@ -1831,7 +1831,8 @@ async function renderResultsAll() {
 // ───────── 묶음: 어떤 문항(박스)을 한 과제(분석 단위)로 묶었는지 보고 고치기 ─────────
 // 자동 묶음 = 교과서는 같은 과제 번호(하위 문항 (1)(2) 앞까지)+붙은 쪽, 교육과정은 같은 원래 문장.
 // 직접 묶음 = u.aug(묶음 이름). 떼어 낸 문항은 자기만의 aug를 가짐.
-const GR = { sel: new Set(), onlyCE: '', onlyMulti: false, all: false, man: '', view: null, pg: 0 };
+const GR = { sel: new Set(), onlyCE: '', onlyMulti: false, all: false, man: '', view: null, pg: 0, card: false };
+const GR_COL = ['#d33', '#1f6fd1', '#1a9a4a', '#c27a00', '#8a3fd1', '#d1308a', '#0e9aa7', '#6b6b00'];
 // 오른쪽 칸: 고른 과제의 교과서 쪽 그림에 묶인 문항 박스를 빨간 테두리로(번호표 = 묶음 안 순서). 교육과정은 원래 문장
 async function grSide(x) {
   const A = $('#grSide'); if (!A) return;
@@ -1861,6 +1862,18 @@ function bindGrCards(B, find) {
 }
 const grModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${GR.all ? '' : 'on'}" data-grall0="0">이 목록 (고치기)</button><button class="rs-chip big ${GR.all ? 'on' : ''}" data-grall0="1">모든 목록 한꺼번에 (보기)</button></div>`;
 const bindGrMode = (B) => B.querySelectorAll('[data-grall0]').forEach((b) => b.onclick = () => { GR.all = b.dataset.grall0 === '1'; renderGroups(); });
+// 교과서 쪽마다 그림 위에 박스를 그리고, 같은 과제로 묶인 박스는 같은 색·같은 번호(2개 이상 묶인 것만 색, 혼자인 것은 회색 점선). 박스를 누르면 고르기
+function grPages(shown, m) {
+  const gno = new Map(); let n = 0; shown.forEach((g) => { if (g.list.length > 1) gno.set(g.key, ++n); });
+  const at = new Map(); shown.forEach((g) => g.list.forEach((u, i) => { if (u.r && m.pages[u.page]) { if (!at.has(u.page)) at.set(u.page, []); at.get(u.page).push({ u, g, i }); } }));
+  const ps = [...at.keys()].sort((a, b) => a - b);
+  if (!ps.length) return '<p class="hint">보여 줄 과제가 없어요.</p>';
+  return `<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항이에요(작은 숫자 = 묶음 안 순서). 회색 점선은 혼자인 과제. 박스를 누르면 골라지고, 위 버튼으로 묶거나 뗄 수 있어요.</p>
+    <div class="gp-list">${ps.map((p) => `<div class="gp-page"><div class="gp-lab">${esc(m.pages[p].label)}쪽</div><div class="rs-stage"><img data-gpimg="${p}" alt="${esc(m.pages[p].label)}쪽">${at.get(p).map(({ u, g, i }) => {
+      const k = gno.get(g.key), col = k ? GR_COL[(k - 1) % GR_COL.length] : '#999', name = taskBase(g.list[0].task) || g.list[0].summary || '';
+      return `<div class="gp-box ${k ? '' : 'one'} ${GR.sel.has(u.id) ? 'sel' : ''}" data-gbu="${u.id}" title="${esc(`${name} · ${u.task || ''} ${u.summary || ''}`)}" style="--c:${col};left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%">${k ? `<span class="gp-tag">${k}${g.list.length > 1 ? `<small>-${i + 1}</small>` : ''} ${esc(name.slice(0, 12))}</span>` : ''}</div>`;
+    }).join('')}</div></div>`).join('')}</div>`;
+}
 async function renderGroups() {
   const B = $('#groupsBody'); if (!B) return;
   if (GR.all) return renderGroupsAll();
@@ -1892,12 +1905,17 @@ async function renderGroups() {
     </div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab">내용 요소</span><button class="rs-chip ${GR.onlyCE ? '' : 'on'}" data-grce="">전체 <b>${groups.length}</b></button>${ces.map((c) => `<button class="rs-chip ${GR.onlyCE === c ? 'on' : ''}" data-grce="${esc(c)}">${esc(c)} <b>${groups.filter((g) => ceG(g) === c).length}</b></button>`).join('')}<label class="hint" style="margin-left:8px"><input type="checkbox" id="grMulti" ${GR.onlyMulti ? 'checked' : ''}> 2개 이상 묶인 것만</label></div></div>
     <div class="bar gr-bar"><b id="grN">고른 문항 ${GR.sel.size}개</b><button id="grJoin" class="gr-main">고른 문항을 한 과제로 묶기</button><button id="grSplit">고른 문항을 따로 떼기</button><button id="grAuto">고른 문항을 자동 묶음으로 되돌리기</button><button id="grClear">고르기 풀기</button></div>
-    <div class="rs-wrap"><div class="gr-list">${shown.map((g, i) => { const man = g.list.some((u) => u.aug); return `<div class="gr-card ${g.list.length > 1 ? 'multi' : ''} ${GR.view && GR.view.book === book && GR.view.g.key === g.key ? 'on' : ''}" data-grk="${esc(g.key)}" data-grv="${esc(book + '|' + g.key)}">
+    ${!cur && m.pages ? `<div class="rs-chips"><span class="rs-lab">보기</span><button class="rs-chip ${GR.card ? '' : 'on'}" data-grcard="0">교과서 쪽으로</button><button class="rs-chip ${GR.card ? 'on' : ''}" data-grcard="1">카드로</button></div>` : ''}
+    ${!cur && m.pages && !GR.card ? grPages(shown, m) : `<div class="rs-wrap"><div class="gr-list">${shown.map((g, i) => { const man = g.list.some((u) => u.aug); return `<div class="gr-card ${g.list.length > 1 ? 'multi' : ''} ${GR.view && GR.view.book === book && GR.view.g.key === g.key ? 'on' : ''}" data-grk="${esc(g.key)}" data-grv="${esc(book + '|' + g.key)}">
       <div class="gr-head"><label><input type="checkbox" data-grall="${esc(g.key)}" ${g.list.every((u) => GR.sel.has(u.id)) ? 'checked' : ''}> <b>${esc(cur ? (g.list[0].orig || g.list[0].summary || '') : (taskBase(g.list[0].task) || g.list[0].summary || '(과제 번호 없음)'))}</b></label>
         <span class="rs-ty">${esc(ceG(g))}</span><span class="rs-ty ${man ? 'p0' : ''}">${man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${g.list.length}개 · ${esc([...new Set(g.list.map(pgl))].join('·'))}</span>${finWarn(g)}<button class="gr-show" data-grshow>${cur ? '원래 문장 보기' : '쪽 그림 보기'}</button></div>
-      <ol class="gr-items">${g.list.map((u) => `<li><label><input type="checkbox" data-gru="${u.id}" ${GR.sel.has(u.id) ? 'checked' : ''}> <span class="gr-task">${esc(cur ? (u.task || '') : (u.task || ''))}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(u))}${(u.kind || 'main') !== 'main' ? ' · ' + esc(KINDS[u.kind] || u.kind) : ''}</span></label></li>`).join('')}</ol></div>`; }).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div><aside id="grSide" class="rs-side"></aside></div>`;
+      <ol class="gr-items">${g.list.map((u) => `<li><label><input type="checkbox" data-gru="${u.id}" ${GR.sel.has(u.id) ? 'checked' : ''}> <span class="gr-task">${esc(cur ? (u.task || '') : (u.task || ''))}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(u))}${(u.kind || 'main') !== 'main' ? ' · ' + esc(KINDS[u.kind] || u.kind) : ''}</span></label></li>`).join('')}</ol></div>`; }).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div><aside id="grSide" class="rs-side"></aside></div>`}`;
   bindGrMode(B);
-  bindGrCards(B, (k) => { const g = groups.find((y) => book + '|' + y.key === k); return g ? { book, g } : null; });
+  B.querySelectorAll('[data-grcard]').forEach((b) => b.onclick = () => { GR.card = b.dataset.grcard === '1'; renderGroups(); });
+  if (!cur && m.pages && !GR.card) {
+    B.querySelectorAll('[data-gbu]').forEach((d) => d.onclick = () => { const id = d.dataset.gbu; GR.sel.has(id) ? GR.sel.delete(id) : GR.sel.add(id); d.classList.toggle('sel', GR.sel.has(id)); $('#grN').textContent = `고른 문항 ${GR.sel.size}개`; });
+    B.querySelectorAll('[data-gpimg]').forEach(async (im) => { try { im.src = await pageImage(book, m.pages[im.dataset.gpimg].file); } catch { im.alt = '쪽 이미지를 불러오지 못했습니다'; } });
+  } else bindGrCards(B, (k) => { const g = groups.find((y) => book + '|' + y.key === k); return g ? { book, g } : null; });
   const upd = () => { $('#grN').textContent = `고른 문항 ${GR.sel.size}개`; };
   B.querySelectorAll('[data-gru]').forEach((c) => c.onchange = () => { c.checked ? GR.sel.add(c.dataset.gru) : GR.sel.delete(c.dataset.gru); upd(); });
   B.querySelectorAll('[data-grall]').forEach((c) => c.onchange = () => { const g = groups.find((x) => x.key === c.dataset.grall); g.list.forEach((u) => (c.checked ? GR.sel.add(u.id) : GR.sel.delete(u.id))); c.closest('.gr-card').querySelectorAll('[data-gru]').forEach((x) => { x.checked = c.checked; }); upd(); });
