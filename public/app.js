@@ -644,7 +644,9 @@ function auMap(units, cur, pre = '') {
   const last = new Map(), au = new Map(); let gi = 0;
   [...units].sort((x, y) => (x.page || 0) - (y.page || 0)).forEach((u) => {
     // u.aug: '묶음' 탭에서 직접 정한 묶음 이름. 있으면 쪽이 떨어져 있어도 같은 과제
-    const base = u.aug ? '@' + u.aug : cur ? (u.orig || u.summary || u.id) : (taskBase(u.task) || u.id);
+    // 11/13: 도입 질문(kind intro)은 같은 쪽의 '이름 + 번호'(생각해 봅시다 1·2 …)를 한 과제로 (같은 자료를 보고 답하는 문항)
+    const tb = taskBase(u.task), introN = !cur && (u.kind || 'main') === 'intro' && /\s+\d+$/.test(tb || '');
+    const base = u.aug ? '@' + u.aug : cur ? (u.orig || u.summary || u.id) : introN ? `${tb.replace(/\s+\d+$/, '')}@p${u.page}` : (tb || u.id);
     const pg = u.page || 0, prev = last.get(base);
     const key = prev && (cur || u.aug || pg - prev.page <= 1) ? prev.key : `${pre}#${++gi}`;
     last.set(base, { page: pg, key }); au.set(u.id, key);
@@ -1581,6 +1583,8 @@ function rsClassify(by) {
   const grp = pri ? type : ediff.includes('X') ? '해당없음 포함' : hasSt && hasLi ? '단계+소양 다름' : hasSt ? '단계만 다름' : '소양만 다름';
   return { diff, dis: diff.size > 0, ediff, type, grp, pri, maj: maj.length > 1 ? maj.filter((k) => k !== 'X') : maj };
 }
+// 최종 코드는 묶음(문항 id들)이 지금과 같을 때만 확정으로 봄. 묶음이 바뀌면 다시 정하기(저장된 값은 남겨 둠)
+const finOk = (f, g) => (f && (!Array.isArray(f.ids) || f.ids.slice().sort().join() === g.list.map((u) => u.id).sort().join()) ? f : null);
 async function renderResults() {
   if (RS.all) return renderResultsAll();
   const B = $('#resultsBody');
@@ -1599,7 +1603,7 @@ async function renderResults() {
   const gi = new Map();
   units.forEach((u) => { const k = map.get(u.id); if (!gi.has(k)) { gi.set(k, { key: k, list: [] }); groups.push(gi.get(k)); } gi.get(k).list.push(u); });
   const merged = (c, g) => rsMerged(itemsOf(c), g);
-  const rows = groups.map((g) => { const by = coders.map((c) => merged(c, g)); return { g, by, ...rsClassify(by), fin: FIN43.data.au[g.list[0].id] }; });
+  const rows = groups.map((g) => { const by = coders.map((c) => merged(c, g)); return { g, by, ...rsClassify(by), fin: finOk(FIN43.data.au[g.list[0].id], g) }; });
   // 우선순위: 7요소가 다른 것 → 칸만 다른 것 → 일치 → 비교 불가. 같은 순위 안에서는 유형별로 모으고, 유형 안은 원래(쪽) 순서
   const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
   const gcount = {}; rows.forEach((x) => { gcount[x.grp] = (gcount[x.grp] || 0) + 1; });
@@ -1735,7 +1739,7 @@ async function renderResultsAll() {
       const u = g.list[0];
       const title = cur ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)');
       const text = cur ? (u.orig || u.summary || '') : [...new Set(g.list.map((x) => x.summary || ''))].join(' / ');
-      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: RA.fins[id].data.au[u.id] });
+      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: finOk(RA.fins[id].data.au[u.id], g) });
     });
   });
   const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
