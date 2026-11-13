@@ -2000,7 +2000,8 @@ async function renderGroupsAll() {
     const id = pg.closest('[data-gpb]').dataset.gpb, p = pg.dataset.gpp;
     GR.all = false; GR.card = false; GR.onlyCE = ''; GR.onlyMulti = false; GR.sel.clear(); if (box) GR.sel.add(box.dataset.gbu);
     await selectBook(id); await renderGroups();
-    const t = $('#groupsBody').querySelector(`.gp-page[data-gpp="${p}"]`); if (t) t.scrollIntoView({ block: 'start' });
+    const t = $('#groupsBody').querySelector(`.gp-page[data-gpp="${p}"]`);
+    if (t) { const go = () => t.scrollIntoView({ block: 'start' }); go(); [400, 1200, 2500].forEach((ms) => setTimeout(go, ms)); } // 위쪽 그림이 늦게 들어와 밀리면 다시 맞춤
     toast(box ? '그 문항을 골라 두었어요. 같이 묶을 박스를 더 누르고 위 버튼을 누르세요.' : '이 쪽에서 박스를 눌러 고른 뒤 위 버튼으로 묶거나 떼세요.');
   });
   B.querySelectorAll('[data-grallpg]').forEach((b) => b.onclick = () => { GR.allPg = b.dataset.grallpg === '1'; renderGroups(); });
