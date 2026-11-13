@@ -1695,6 +1695,8 @@ const RS_CHECKS = [
     test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /상대적|더 많|더 높|더 무거|많은지|높은 반|많은 반|무거운|키 큰|비교하기|분포 비교|상대 비교/.test(x.text) && !/O,?X|OX|참거짓|용도|총합/.test(x.text) && !c.includes('IR') },
   { id: 'r5ar', name: '분포 치우침·특징 비교인데 AR 없음', rule: '규칙 5: "오른쪽으로 치우쳐 있다" = AR',
     test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /치우|모양|특징|분포를 비교|분포 비교|퍼져/.test(x.text) && !c.includes('AR') },
+  { id: 'stale', name: '묶음이 바뀜 · 최종 다시 정하기', rule: '묶기 전에 정한 최종은 문항 하나 기준이라 미정으로 돌림(저장값은 남음)', test: (x) => x.stale },
+  { id: 'proj', name: '묶은 프로젝트 (각자 코딩 → 다수결)', rule: '규칙 2: 프로젝트는 하위 활동을 묶어 과제 하나', test: (x) => x.proj },
 ];
 // 내용 요소: 코딩 화면의 내용 요소(unitCE)를 씀. 자료 정리 그래프 네 가지는 하나로 묶음. 한 과제에 여럿이면 CE_PICK 순서로 하나
 const CE_GRP = { '줄기와 잎 그림': '도수분포표·그래프', '도수분포표': '도수분포표·그래프', '히스토그램': '도수분포표·그래프', '도수분포다각형': '도수분포표·그래프' };
@@ -1739,7 +1741,7 @@ async function renderResultsAll() {
       const u = g.list[0];
       const title = cur ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)');
       const text = cur ? (u.orig || u.summary || '') : [...new Set(g.list.map((x) => x.summary || ''))].join(' / ');
-      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: finOk(RA.fins[id].data.au[u.id], g) });
+      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: finOk(RA.fins[id].data.au[u.id], g), stale: !!(RA.fins[id].data.au[u.id] && !finOk(RA.fins[id].data.au[u.id], g)), proj: g.list.some((x) => x.aug && x.aug[0] === 'p') });
     });
   });
   const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
@@ -1772,11 +1774,11 @@ async function renderResultsAll() {
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
     ${rsSumHtml(nE, nCell, nSame, fins(() => true), rows.length, closed ? `아직 안 열린 목록 ${closed}개는 빠짐` : '')}
-    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">규칙 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · 낱말로 찾은 후보라 눈으로 확인하세요 · 점검 중에는 아래 1·2·3 고르기가 꺼져요</span>` : ''}</div></div>
+    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">회의 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · ${['r5ir', 'r5ar'].includes(RA.chk) ? '낱말로 찾은 후보라 눈으로 확인하세요 · ' : ''}점검 중에는 아래 1·2·3 고르기가 꺼져요</span>` : ''}</div></div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
     ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
     <div class="rs-chips"><span class="rs-lab"><i>3</i>내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div></div>
-    <div class="bar">${RA.grp ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
+    <div class="bar">${RA.grp || RA.chk ? `<button id="raMaj">보이는 과제의 빈 최종을 다수결로 채우기 (${shown.filter((x) => !x.fin && x.maj.length).length})</button>` : ''}<label><input type="checkbox" id="raTodo" ${RA.onlyTodo ? 'checked' : ''}> 최종 안 정한 것만</label><b>최종 확정 ${fins(() => true)}/${rows.length}</b><span class="hint">줄을 누르면 오른쪽에 교과서 쪽이 나와요</span></div>
     <div class="rs-wrap"><div class="ov-wrap"><table class="t rs"><tr><th class="l">과제</th>${coders.map((c) => `<th>${esc(c)}</th>`).join('')}<th class="fin-h">최종</th></tr>
       ${view.map((x) => `<tr class="${x.g.key === RA.sel ? 'on' : ''} ${x.dis ? 'dis' : ''}" data-ra="${esc(x.g.key)}"><td class="l"><div class="hint">${esc(shortBook(x.book))}</div><div class="rs-t">${esc(x.title)}</div><div class="rs-ty p${x.pri}">${esc(x.type)}</div> <span class="rs-ty">${esc(x.ce)}</span><div class="hint">${esc(where0(x))}${x.g.list.length > 1 ? ` · ${x.cur ? '조각' : '하위 문항'} ${x.g.list.length}개` : ''}</div></td>
         ${x.by.map((b) => `<td>${b ? `${mini43(b.cells, x.diff)}<div class="rs-sl">${esc(stLit(b.cells))}</div>${b.done < b.all ? `<div class="hint">${b.done}/${b.all} 문항만 함</div>` : ''}` : '<span class="hint">—</span>'}</td>`).join('')}<td class="fin-c">${fin43(x.g.list[0].id, x.fin, x.maj)}</td></tr>`).join('') || `<tr><td colspan="${coders.length + 2}" class="hint">보여 줄 과제가 없어요.</td></tr>`}
