@@ -1862,15 +1862,15 @@ function bindGrCards(B, find) {
 }
 const grModeBar = () => `<div class="rs-chips"><button class="rs-chip big ${GR.all ? '' : 'on'}" data-grall0="0">이 목록 (고치기)</button><button class="rs-chip big ${GR.all ? 'on' : ''}" data-grall0="1">모든 목록 한꺼번에 (보기)</button></div>`;
 const bindGrMode = (B) => B.querySelectorAll('[data-grall0]').forEach((b) => b.onclick = () => { GR.all = b.dataset.grall0 === '1'; renderGroups(); });
-// 교과서 쪽마다 그림 위에 박스를 그리고, 같은 과제로 묶인 박스는 같은 색·같은 번호(2개 이상 묶인 것만 색, 혼자인 것은 회색 점선). 박스를 누르면 고르기
+// 교과서 쪽마다 그림 위에 박스를 그리고, 같은 과제로 묶인 박스는 같은 색·같은 번호(2개 이상 묶인 것만 색, 혼자인 것은 검정 실선). 박스를 누르면 고르기
 function grPages(shown, m, hint = true) {
   const gno = new Map(); let n = 0; shown.forEach((g) => { if (g.list.length > 1) gno.set(g.key, ++n); });
   const at = new Map(); shown.forEach((g) => g.list.forEach((u, i) => { if (u.r && m.pages[u.page]) { if (!at.has(u.page)) at.set(u.page, []); at.get(u.page).push({ u, g, i }); } }));
   const ps = [...at.keys()].sort((a, b) => a - b);
   if (!ps.length) return '<p class="hint">보여 줄 과제가 없어요.</p>';
-  return `${hint ? '<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항이에요(작은 숫자 = 묶음 안 순서). 회색 점선은 혼자인 과제. 박스를 누르면 골라지고, 위 버튼으로 묶거나 뗄 수 있어요.</p>' : ''}
+  return `${hint ? '<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항이에요(작은 숫자 = 묶음 안 순서). 검정 실선은 혼자인 과제. 박스를 누르면 골라지고, 위 버튼으로 묶거나 뗄 수 있어요.</p>' : ''}
     <div class="gp-list">${ps.map((p) => `<div class="gp-page"><div class="gp-lab">${esc(m.pages[p].label)}쪽</div><div class="rs-stage"><img data-gpimg="${p}" alt="${esc(m.pages[p].label)}쪽">${at.get(p).map(({ u, g, i }) => {
-      const k = gno.get(g.key), col = k ? GR_COL[(k - 1) % GR_COL.length] : '#999', name = taskBase(g.list[0].task) || g.list[0].summary || '';
+      const k = gno.get(g.key), col = k ? GR_COL[(k - 1) % GR_COL.length] : '#111', name = taskBase(g.list[0].task) || g.list[0].summary || '';
       return `<div class="gp-box ${k ? '' : 'one'} ${GR.sel.has(u.id) ? 'sel' : ''}" data-gbu="${u.id}" title="${esc(`${name} · ${u.task || ''} ${u.summary || ''}`)}" style="--c:${col};left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%">${k ? `<span class="gp-tag">${k}${g.list.length > 1 ? `<small>-${i + 1}</small>` : ''} ${esc(name.slice(0, 12))}</span>` : `<span class="gp-tag one">${esc(name.slice(0, 12))}</span>`}</div>`;
     }).join('')}</div></div>`).join('')}</div>`;
 }
@@ -1946,7 +1946,7 @@ function grBookKey(id) {
   return [cur ? 0 : 1, cur ? 0 : (pi < 0 ? 9 : pi), +(m.period || 0), gr, id];
 }
 const grBookCmp = (a, b) => { const x = grBookKey(a), y = grBookKey(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
-// 모든 목록 · 교과서 쪽으로: 고른 조건(직접/자동·내용 요소)에 맞는 2개 이상 묶인 과제가 있는 쪽만, 목록마다 이어서. 그 쪽의 다른 박스도 함께(혼자면 회색 점선). 보기 전용
+// 모든 목록 · 교과서 쪽으로: 고른 조건(직접/자동·내용 요소)에 맞는 2개 이상 묶인 과제가 있는 쪽만, 목록마다 이어서. 그 쪽의 다른 박스도 함께(혼자면 검정 실선). 보기 전용
 function grAllPages(shown, BG) {
   // 묶인 과제(shown, 위 칩으로 거른 것)는 늘 넣고, '모든 쪽'이면 혼자인 과제도(내용 요소 칩만 적용)
   const keys = new Set(shown.map((x) => x.book + '|' + x.g.key));
@@ -1961,7 +1961,7 @@ function grAllPages(shown, BG) {
   }).filter((b) => b.gs.length && (b.cur || b.m.pages));
   if (!books.length) return '<p class="hint">보여 줄 과제가 없어요.</p>';
   const head = (b) => `<h3>${esc(bookName(b.id))} <span class="hint">묶인 ${b.cur ? '문장' : '과제'} ${b.multi.length}개 · 혼자 ${b.gs.length - b.multi.length}개</span> <a href="#" data-grgo="${esc(b.id)}">이 목록에서 고치기</a></h3>`;
-  return `<p class="hint">순서: 교육과정 2009→2015→2022, 교과서 미래엔·비상·동아(각각 2009→2015→2022, 중1→중3 목차 순). 교과서는 같은 색·같은 번호 박스가 한 과제, 회색 점선은 혼자인 과제. ${GR.allPg ? '지금은 모든 쪽을 보여요.' : '지금은 2개 이상 묶인 과제가 있는 쪽만 보여요.'} 고치려면 목록 이름 옆 '이 목록에서 고치기'.</p>` +
+  return `<p class="hint">순서: 교육과정 2009→2015→2022, 교과서 미래엔·비상·동아(각각 2009→2015→2022, 중1→중3 목차 순). 교과서는 같은 색·같은 번호 박스가 한 과제, 검정 실선은 혼자인 과제. ${GR.allPg ? '지금은 모든 쪽을 보여요.' : '지금은 2개 이상 묶인 과제가 있는 쪽만 보여요.'} 고치려면 목록 이름 옆 '이 목록에서 고치기'.</p>` +
     books.map((b) => {
       if (b.cur) return `<div class="gp-book" data-gpb="${esc(b.id)}">${head(b)}<div class="gr-list">${b.gs.map((g) => { const x = g.list.length > 1; return `<div class="gr-card ${x ? 'multi' : ''}"><div class="gr-head"><b>${esc(g.list[0].orig || g.list[0].summary || '')}</b><span class="rs-ty">${esc(ceOfG(g.list))}</span>${x ? `<span class="rs-ty ${g.list.some((u) => u.aug) ? 'p0' : ''}">${g.list.some((u) => u.aug) ? '직접 묶음' : '자동 묶음'}</span>` : '<span class="rs-ty">혼자</span>'}<span class="hint">문항 ${g.list.length}개</span></div><ol class="gr-items">${g.list.map((u) => `<li>${esc(u.summary || '')} <span class="hint">${esc(u.std || '')}</span></li>`).join('')}</ol></div>`; }).join('')}</div></div>`;
       return `<div class="gp-book" data-gpb="${esc(b.id)}">${head(b)}${grPages(b.gs, b.m, false)}</div>`;
