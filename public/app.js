@@ -1938,12 +1938,21 @@ async function renderGroups() {
 }
 
 // 모든 목록의 묶음을 한꺼번에 보기(2개 이상 묶인 과제만). 고치기는 '이 목록'에서
+// 모든 목록 보는 순서: 교육과정(2009→2015→2022) → 교과서 미래엔·비상·동아, 출판사 안에서 시기 → 학년 → 단원 목차(목록 id 순)
+const GR_PUB = ['미래엔', '비상', '동아'];
+function grBookKey(id) {
+  const m = S.metas[id] || {}, cur = isCur(id), pi = GR_PUB.findIndex((p) => (m.publisher || '').startsWith(p));
+  const gr = +(((m.title || '').match(/중\s*(\d)/) || [])[1] || 0);
+  return [cur ? 0 : 1, cur ? 0 : (pi < 0 ? 9 : pi), +(m.period || 0), gr, id];
+}
+const grBookCmp = (a, b) => { const x = grBookKey(a), y = grBookKey(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
 // 모든 목록 · 교과서 쪽으로: 고른 조건(직접/자동·내용 요소)에 맞는 2개 이상 묶인 과제가 있는 쪽만, 목록마다 이어서. 그 쪽의 다른 박스도 함께(혼자면 회색 점선). 보기 전용
 function grAllPages(shown, BG) {
-  const byBook = new Map(); shown.forEach((x) => { if (x.cur || !x.m.pages) return; if (!byBook.has(x.book)) byBook.set(x.book, []); byBook.get(x.book).push(x); });
-  if (!byBook.size) return '<p class="hint">보여 줄 교과서 과제가 없어요. 교육과정은 \'카드로\'에서 보세요.</p>';
-  return `<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항, 회색 점선은 혼자인 과제예요. 2개 이상 묶인 과제가 있는 쪽만 보여요. 고치려면 목록 이름 옆 '이 목록에서 고치기'. 교육과정은 '카드로'에서 보세요.</p>` +
+  const byBook = new Map(); shown.forEach((x) => { if (!x.cur && !x.m.pages) return; if (!byBook.has(x.book)) byBook.set(x.book, []); byBook.get(x.book).push(x); });
+  if (!byBook.size) return '<p class="hint">보여 줄 과제가 없어요.</p>';
+  return `<p class="hint">순서: 교육과정 2009→2015→2022, 교과서 미래엔·비상·동아(각각 2009→2015→2022, 중1→중3 목차 순). 교과서는 같은 색·같은 번호 박스가 한 과제, 회색 점선은 혼자인 과제(2개 이상 묶인 과제가 있는 쪽만). 고치려면 목록 이름 옆 '이 목록에서 고치기'.</p>` +
     [...byBook].map(([id, xs]) => {
+      if (xs[0].cur) return `<div class="gp-book" data-gpb="${esc(id)}"><h3>${esc(bookName(id))} <span class="hint">묶인 문장 ${xs.length}개</span> <a href="#" data-grgo="${esc(id)}">이 목록에서 고치기</a></h3><div class="gr-list">${xs.map((x) => `<div class="gr-card multi"><div class="gr-head"><b>${esc(x.g.list[0].orig || x.g.list[0].summary || '')}</b><span class="rs-ty">${esc(x.ce)}</span><span class="rs-ty ${x.man ? 'p0' : ''}">${x.man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${x.g.list.length}개</span></div><ol class="gr-items">${x.g.list.map((u) => `<li>${esc(u.summary || '')} <span class="hint">${esc(u.std || '')}</span></li>`).join('')}</ol></div>`).join('')}</div></div>`;
       const m = S.metas[id], keys = new Set(xs.map((x) => x.g.key)), pages = new Set(xs.flatMap((x) => x.g.list.map((u) => u.page)));
       const gs = (BG[id] || []).filter((g) => keys.has(g.key) || (g.list.length === 1 && pages.has(g.list[0].page)));
       return `<div class="gp-book" data-gpb="${esc(id)}"><h3>${esc(bookName(id))} <span class="hint">묶인 과제 ${xs.length}개</span> <a href="#" data-grgo="${esc(id)}">이 목록에서 고치기</a></h3>${grPages(gs, m, false)}</div>`;
@@ -1953,7 +1962,7 @@ async function renderGroupsAll() {
   const B = $('#groupsBody');
   B.innerHTML = `<h2>묶음 확인 <span class="hint">모든 목록</span></h2>${grModeBar()}<p class="hint">모든 목록을 불러오는 중…</p>`; bindGrMode(B);
   const kinds = S.cfg.defaultKinds || ['main', 'intro'];
-  const all = await Promise.all(S.cfg.books.map((id) => getStore(`books/${id}/units.json`).then((u) => [id, (u.data && u.data.units) || []]).catch(() => [id, []])));
+  const all = await Promise.all([...S.cfg.books].sort(grBookCmp).map((id) => getStore(`books/${id}/units.json`).then((u) => [id, (u.data && u.data.units) || []]).catch(() => [id, []])));
   if (!GR.all) return;
   const G = [], BG = {};
   all.forEach(([id, us]) => {
