@@ -1831,7 +1831,7 @@ async function renderResultsAll() {
 // ───────── 묶음: 어떤 문항(박스)을 한 과제(분석 단위)로 묶었는지 보고 고치기 ─────────
 // 자동 묶음 = 교과서는 같은 과제 번호(하위 문항 (1)(2) 앞까지)+붙은 쪽, 교육과정은 같은 원래 문장.
 // 직접 묶음 = u.aug(묶음 이름). 떼어 낸 문항은 자기만의 aug를 가짐.
-const GR = { sel: new Set(), onlyCE: '', onlyMulti: false, all: false, man: '', view: null, pg: 0, card: false };
+const GR = { sel: new Set(), onlyCE: '', onlyMulti: false, all: false, man: '', view: null, pg: 0, card: false, allPg: false };
 const GR_COL = ['#d33', '#1f6fd1', '#1a9a4a', '#c27a00', '#8a3fd1', '#d1308a', '#0e9aa7', '#6b6b00'];
 // 오른쪽 칸: 고른 과제의 교과서 쪽 그림에 묶인 문항 박스를 빨간 테두리로(번호표 = 묶음 안 순서). 교육과정은 원래 문장
 async function grSide(x) {
@@ -1871,7 +1871,7 @@ function grPages(shown, m, hint = true) {
   return `${hint ? '<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항이에요(작은 숫자 = 묶음 안 순서). 회색 점선은 혼자인 과제. 박스를 누르면 골라지고, 위 버튼으로 묶거나 뗄 수 있어요.</p>' : ''}
     <div class="gp-list">${ps.map((p) => `<div class="gp-page"><div class="gp-lab">${esc(m.pages[p].label)}쪽</div><div class="rs-stage"><img data-gpimg="${p}" alt="${esc(m.pages[p].label)}쪽">${at.get(p).map(({ u, g, i }) => {
       const k = gno.get(g.key), col = k ? GR_COL[(k - 1) % GR_COL.length] : '#999', name = taskBase(g.list[0].task) || g.list[0].summary || '';
-      return `<div class="gp-box ${k ? '' : 'one'} ${GR.sel.has(u.id) ? 'sel' : ''}" data-gbu="${u.id}" title="${esc(`${name} · ${u.task || ''} ${u.summary || ''}`)}" style="--c:${col};left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%">${k ? `<span class="gp-tag">${k}${g.list.length > 1 ? `<small>-${i + 1}</small>` : ''} ${esc(name.slice(0, 12))}</span>` : ''}</div>`;
+      return `<div class="gp-box ${k ? '' : 'one'} ${GR.sel.has(u.id) ? 'sel' : ''}" data-gbu="${u.id}" title="${esc(`${name} · ${u.task || ''} ${u.summary || ''}`)}" style="--c:${col};left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%">${k ? `<span class="gp-tag">${k}${g.list.length > 1 ? `<small>-${i + 1}</small>` : ''} ${esc(name.slice(0, 12))}</span>` : `<span class="gp-tag one">${esc(name.slice(0, 12))}</span>`}</div>`;
     }).join('')}</div></div>`).join('')}</div>`;
 }
 // 쪽 그림은 화면 가까이 왔을 때만 불러옴(모든 목록이면 수백 쪽). 목록 id는 가장 가까운 [data-gpb]에서, 없으면 def
@@ -1948,14 +1948,23 @@ function grBookKey(id) {
 const grBookCmp = (a, b) => { const x = grBookKey(a), y = grBookKey(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
 // 모든 목록 · 교과서 쪽으로: 고른 조건(직접/자동·내용 요소)에 맞는 2개 이상 묶인 과제가 있는 쪽만, 목록마다 이어서. 그 쪽의 다른 박스도 함께(혼자면 회색 점선). 보기 전용
 function grAllPages(shown, BG) {
-  const byBook = new Map(); shown.forEach((x) => { if (!x.cur && !x.m.pages) return; if (!byBook.has(x.book)) byBook.set(x.book, []); byBook.get(x.book).push(x); });
-  if (!byBook.size) return '<p class="hint">보여 줄 과제가 없어요.</p>';
-  return `<p class="hint">순서: 교육과정 2009→2015→2022, 교과서 미래엔·비상·동아(각각 2009→2015→2022, 중1→중3 목차 순). 교과서는 같은 색·같은 번호 박스가 한 과제, 회색 점선은 혼자인 과제(2개 이상 묶인 과제가 있는 쪽만). 고치려면 목록 이름 옆 '이 목록에서 고치기'.</p>` +
-    [...byBook].map(([id, xs]) => {
-      if (xs[0].cur) return `<div class="gp-book" data-gpb="${esc(id)}"><h3>${esc(bookName(id))} <span class="hint">묶인 문장 ${xs.length}개</span> <a href="#" data-grgo="${esc(id)}">이 목록에서 고치기</a></h3><div class="gr-list">${xs.map((x) => `<div class="gr-card multi"><div class="gr-head"><b>${esc(x.g.list[0].orig || x.g.list[0].summary || '')}</b><span class="rs-ty">${esc(x.ce)}</span><span class="rs-ty ${x.man ? 'p0' : ''}">${x.man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${x.g.list.length}개</span></div><ol class="gr-items">${x.g.list.map((u) => `<li>${esc(u.summary || '')} <span class="hint">${esc(u.std || '')}</span></li>`).join('')}</ol></div>`).join('')}</div></div>`;
-      const m = S.metas[id], keys = new Set(xs.map((x) => x.g.key)), pages = new Set(xs.flatMap((x) => x.g.list.map((u) => u.page)));
-      const gs = (BG[id] || []).filter((g) => keys.has(g.key) || (g.list.length === 1 && pages.has(g.list[0].page)));
-      return `<div class="gp-book" data-gpb="${esc(id)}"><h3>${esc(bookName(id))} <span class="hint">묶인 과제 ${xs.length}개</span> <a href="#" data-grgo="${esc(id)}">이 목록에서 고치기</a></h3>${grPages(gs, m, false)}</div>`;
+  // 묶인 과제(shown, 위 칩으로 거른 것)는 늘 넣고, '모든 쪽'이면 혼자인 과제도(내용 요소 칩만 적용)
+  const keys = new Set(shown.map((x) => x.book + '|' + x.g.key));
+  const one = (id, g) => g.list.length === 1 && (!GR.onlyCE || ceOfG(g.list) === GR.onlyCE) && GR.man !== 'auto' && (GR.man !== 'man' || g.list[0].aug);
+  const books = Object.keys(BG).map((id) => {
+    const m = S.metas[id] || {}, cur = isCur(id), all = BG[id] || [];
+    const multi = all.filter((g) => keys.has(id + '|' + g.key));
+    let gs;
+    if (GR.allPg) gs = all.filter((g) => keys.has(id + '|' + g.key) || one(id, g));
+    else { const pages = new Set(multi.flatMap((g) => g.list.map((u) => u.page))); gs = cur ? multi : all.filter((g) => keys.has(id + '|' + g.key) || (g.list.length === 1 && pages.has(g.list[0].page))); }
+    return { id, m, cur, multi, gs };
+  }).filter((b) => b.gs.length && (b.cur || b.m.pages));
+  if (!books.length) return '<p class="hint">보여 줄 과제가 없어요.</p>';
+  const head = (b) => `<h3>${esc(bookName(b.id))} <span class="hint">묶인 ${b.cur ? '문장' : '과제'} ${b.multi.length}개 · 혼자 ${b.gs.length - b.multi.length}개</span> <a href="#" data-grgo="${esc(b.id)}">이 목록에서 고치기</a></h3>`;
+  return `<p class="hint">순서: 교육과정 2009→2015→2022, 교과서 미래엔·비상·동아(각각 2009→2015→2022, 중1→중3 목차 순). 교과서는 같은 색·같은 번호 박스가 한 과제, 회색 점선은 혼자인 과제. ${GR.allPg ? '지금은 모든 쪽을 보여요.' : '지금은 2개 이상 묶인 과제가 있는 쪽만 보여요.'} 고치려면 목록 이름 옆 '이 목록에서 고치기'.</p>` +
+    books.map((b) => {
+      if (b.cur) return `<div class="gp-book" data-gpb="${esc(b.id)}">${head(b)}<div class="gr-list">${b.gs.map((g) => { const x = g.list.length > 1; return `<div class="gr-card ${x ? 'multi' : ''}"><div class="gr-head"><b>${esc(g.list[0].orig || g.list[0].summary || '')}</b><span class="rs-ty">${esc(ceOfG(g.list))}</span>${x ? `<span class="rs-ty ${g.list.some((u) => u.aug) ? 'p0' : ''}">${g.list.some((u) => u.aug) ? '직접 묶음' : '자동 묶음'}</span>` : '<span class="rs-ty">혼자</span>'}<span class="hint">문항 ${g.list.length}개</span></div><ol class="gr-items">${g.list.map((u) => `<li>${esc(u.summary || '')} <span class="hint">${esc(u.std || '')}</span></li>`).join('')}</ol></div>`; }).join('')}</div></div>`;
+      return `<div class="gp-book" data-gpb="${esc(b.id)}">${head(b)}${grPages(b.gs, b.m, false)}</div>`;
     }).join('');
 }
 async function renderGroupsAll() {
@@ -1980,11 +1989,12 @@ async function renderGroupsAll() {
     <div class="rs-stats"><div class="rs-stat"><span>2개 이상 묶인 과제</span><b>${G.length}</b><small>문항 ${G.reduce((a, x) => a + x.g.list.length, 0)}개</small></div><div class="rs-stat p0"><span>직접 묶음</span><b>${G.filter((x) => x.man).length}</b><small>묶음 탭에서 고친 것</small></div><div class="rs-stat"><span>자동 묶음</span><b>${G.filter((x) => !x.man).length}</b><small>같은 과제 번호·원래 문장</small></div></div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab">묶은 방법</span>${[['', '전체'], ['man', '직접 묶음'], ['auto', '자동 묶음']].map(([k, n]) => `<button class="rs-chip ${GR.man === k ? 'on' : ''}" data-grman="${k}">${n} <b>${k ? G.filter((x) => (k === 'man') === x.man).length : G.length}</b></button>`).join('')}</div>
     <div class="rs-chips"><span class="rs-lab">내용 요소</span><button class="rs-chip ${GR.onlyCE ? '' : 'on'}" data-grce="">전체</button>${ces.map((c) => `<button class="rs-chip ${GR.onlyCE === c ? 'on' : ''}" data-grce="${esc(c)}">${esc(c)} <b>${G.filter((x) => x.ce === c).length}</b></button>`).join('')}</div></div>
-    <div class="rs-chips"><span class="rs-lab">보기</span><button class="rs-chip ${GR.card ? '' : 'on'}" data-grcard="0">교과서 쪽으로</button><button class="rs-chip ${GR.card ? 'on' : ''}" data-grcard="1">카드로</button></div>
+    <div class="rs-chips"><span class="rs-lab">보기</span><button class="rs-chip ${GR.card ? '' : 'on'}" data-grcard="0">교과서 쪽으로</button><button class="rs-chip ${GR.card ? 'on' : ''}" data-grcard="1">카드로</button>${GR.card ? '' : `<span class="rs-lab" style="margin-left:12px">쪽</span><button class="rs-chip ${GR.allPg ? '' : 'on'}" data-grallpg="0">묶인 과제 있는 쪽만</button><button class="rs-chip ${GR.allPg ? 'on' : ''}" data-grallpg="1">모든 쪽 (안 묶인 것도)</button>`}</div>
     ${!GR.card ? grAllPages(shown, BG) : `<div class="rs-wrap"><div class="gr-list">${shown.map((x) => `<div class="gr-card multi ${GR.view && GR.view.book === x.book && GR.view.g.key === x.g.key ? 'on' : ''}" data-grv="${esc(x.book + '|' + x.g.key)}"><div class="hint">${esc(bookName(x.book))}</div><div class="gr-head"><b>${esc(x.cur ? (x.g.list[0].orig || x.g.list[0].summary || '') : (taskBase(x.g.list[0].task) || x.g.list[0].summary || ''))}</b><span class="rs-ty">${esc(x.ce)}</span><span class="rs-ty ${x.man ? 'p0' : ''}">${x.man ? '직접 묶음' : '자동 묶음'}</span><span class="hint">문항 ${x.g.list.length}개</span> <a href="#" data-grgo="${esc(x.book)}">이 목록에서 고치기</a></div>
       <ol class="gr-items">${x.g.list.map((u) => `<li><span class="gr-task">${esc(u.task || '')}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(x, u))}</span></li>`).join('')}</ol></div>`).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div><aside id="grSide" class="rs-side"></aside></div>`}`;
   bindGrMode(B);
   B.querySelectorAll('[data-grcard]').forEach((b) => b.onclick = () => { GR.card = b.dataset.grcard === '1'; renderGroups(); });
+  B.querySelectorAll('[data-grallpg]').forEach((b) => b.onclick = () => { GR.allPg = b.dataset.grallpg === '1'; renderGroups(); });
   if (!GR.card) grLazy(B); else bindGrCards(B, (k) => shown.find((x) => x.book + '|' + x.g.key === k) || null);
   B.querySelectorAll('[data-grman]').forEach((b) => b.onclick = () => { GR.man = b.dataset.grman; renderGroups(); });
   B.querySelectorAll('[data-grce]').forEach((b) => b.onclick = () => { GR.onlyCE = b.dataset.grce; renderGroups(); });
