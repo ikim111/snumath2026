@@ -1869,7 +1869,7 @@ function grPages(shown, m, hint = true) {
   const ps = [...at.keys()].sort((a, b) => a - b);
   if (!ps.length) return '<p class="hint">보여 줄 과제가 없어요.</p>';
   return `${hint ? '<p class="hint">같은 색·같은 번호 박스가 한 과제로 묶인 문항이에요(작은 숫자 = 묶음 안 순서). 검정 실선은 혼자인 과제. 박스를 누르면 골라지고, 위 버튼으로 묶거나 뗄 수 있어요.</p>' : ''}
-    <div class="gp-list">${ps.map((p) => `<div class="gp-page"><div class="gp-lab">${esc(m.pages[p].label)}쪽</div><div class="rs-stage"><img data-gpimg="${p}" alt="${esc(m.pages[p].label)}쪽">${at.get(p).map(({ u, g, i }) => {
+    <div class="gp-list">${ps.map((p) => `<div class="gp-page" data-gpp="${p}"><div class="gp-lab">${esc(m.pages[p].label)}쪽${hint ? '' : ' <a href="#" class="gp-go" data-gpgo="1">이 쪽 고치기 →</a>'}</div><div class="rs-stage"><img data-gpimg="${p}" alt="${esc(m.pages[p].label)}쪽">${at.get(p).map(({ u, g, i }) => {
       const k = gno.get(g.key), col = k ? GR_COL[(k - 1) % GR_COL.length] : '#111', name = taskBase(g.list[0].task) || g.list[0].summary || '';
       return `<div class="gp-box ${k ? '' : 'one'} ${GR.sel.has(u.id) ? 'sel' : ''}" data-gbu="${u.id}" title="${esc(`${name} · ${u.task || ''} ${u.summary || ''}`)}" style="--c:${col};left:${u.r[0] * 100}%;top:${u.r[1] * 100}%;width:${u.r[2] * 100}%;height:${u.r[3] * 100}%">${k ? `<span class="gp-tag">${k}${g.list.length > 1 ? `<small>-${i + 1}</small>` : ''} ${esc(name.slice(0, 12))}</span>` : `<span class="gp-tag one">${esc(name.slice(0, 12))}</span>`}</div>`;
     }).join('')}</div></div>`).join('')}</div>`;
@@ -1994,6 +1994,15 @@ async function renderGroupsAll() {
       <ol class="gr-items">${x.g.list.map((u) => `<li><span class="gr-task">${esc(u.task || '')}</span> ${esc(u.summary || '')} <span class="hint">${esc(pgl(x, u))}</span></li>`).join('')}</ol></div>`).join('') || '<p class="hint">보여 줄 과제가 없어요.</p>'}</div><aside id="grSide" class="rs-side"></aside></div>`}`;
   bindGrMode(B);
   B.querySelectorAll('[data-grcard]').forEach((b) => b.onclick = () => { GR.card = b.dataset.grcard === '1'; renderGroups(); });
+  // 쪽 이름 옆 '이 쪽 고치기'나 박스를 누르면 그 목록의 '이 목록 (고치기)'로 가서 같은 쪽으로 내려감(박스를 눌렀으면 그 문항을 골라 둠)
+  B.querySelectorAll('.gp-book .gp-page').forEach((pg) => pg.onclick = async (e) => {
+    const box = e.target.closest('[data-gbu]'), go = e.target.closest('[data-gpgo]'); if (!box && !go) return; e.preventDefault();
+    const id = pg.closest('[data-gpb]').dataset.gpb, p = pg.dataset.gpp;
+    GR.all = false; GR.card = false; GR.onlyCE = ''; GR.onlyMulti = false; GR.sel.clear(); if (box) GR.sel.add(box.dataset.gbu);
+    await selectBook(id); await renderGroups();
+    const t = $('#groupsBody').querySelector(`.gp-page[data-gpp="${p}"]`); if (t) t.scrollIntoView({ block: 'start' });
+    toast(box ? '그 문항을 골라 두었어요. 같이 묶을 박스를 더 누르고 위 버튼을 누르세요.' : '이 쪽에서 박스를 눌러 고른 뒤 위 버튼으로 묶거나 떼세요.');
+  });
   B.querySelectorAll('[data-grallpg]').forEach((b) => b.onclick = () => { GR.allPg = b.dataset.grallpg === '1'; renderGroups(); });
   if (!GR.card) grLazy(B); else bindGrCards(B, (k) => shown.find((x) => x.book + '|' + x.g.key === k) || null);
   B.querySelectorAll('[data-grman]').forEach((b) => b.onclick = () => { GR.man = b.dataset.grman; renderGroups(); });
