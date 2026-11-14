@@ -1761,7 +1761,12 @@ async function renderResultsAll() {
   const cellsOf = (x) => (x.fin && x.fin.cells) || x.maj || [];
   rows.forEach((x) => { x.chk = RS_CHECKS.filter((c) => c.test(x, cellsOf(x))).map((c) => c.id); });
   const chkN = Object.fromEntries(RS_CHECKS.map((c) => [c.id, rows.filter((x) => x.chk.includes(c.id)).length]));
-  let shown = RA.chk ? sorted.filter((x) => x.chk.includes(RA.chk)) : sorted.filter((x) => inG(x) && inT(x) && inC(x));
+  // 회의 점검: 칩을 누른 순간의 과제를 기억해서, 최종을 정해 점검에서 빠져도 목록에 남김(칩을 다시 누르면 남은 것만)
+  const rkey = (x) => x.book + '|' + x.g.key;
+  if (RA.chk && !RA.keep) RA.keep = { chk: RA.chk, set: new Set(rows.filter((x) => x.chk.includes(RA.chk)).map(rkey)) };
+  if (!RA.chk || (RA.keep && RA.keep.chk !== RA.chk)) RA.keep = RA.chk ? { chk: RA.chk, set: new Set(rows.filter((x) => x.chk.includes(RA.chk)).map(rkey)) } : null;
+  let shown = RA.chk ? sorted.filter((x) => x.chk.includes(RA.chk) || RA.keep.set.has(rkey(x))) : sorted.filter((x) => inG(x) && inT(x) && inC(x));
+  const keptDone = RA.chk ? shown.filter((x) => !x.chk.includes(RA.chk)).length : 0;
   if (RA.onlyTodo) shown = shown.filter((x) => !x.fin);
   const LIMIT = 150, more = shown.length - LIMIT, view = shown.slice(0, LIMIT);
   if (!view.some((x) => x.g.key === RA.sel)) { RA.sel = view.length ? view[0].g.key : null; RA.pg = 0; }
@@ -1774,7 +1779,7 @@ async function renderResultsAll() {
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
     ${rsSumHtml(nE, nCell, nSame, fins(() => true), rows.length, closed ? `아직 안 열린 목록 ${closed}개는 빠짐` : '')}
-    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">회의 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · ${['r5ir', 'r5ar'].includes(RA.chk) ? '낱말로 찾은 후보라 눈으로 확인하세요 · ' : ''}점검 중에는 아래 1·2·3 고르기가 꺼져요</span>` : ''}</div></div>
+    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">회의 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · ${['r5ir', 'r5ar'].includes(RA.chk) ? '낱말로 찾은 후보라 눈으로 확인하세요 · ' : ''}점검 중에는 아래 1·2·3 고르기가 꺼져요${keptDone ? ` · <b>이번에 정한 ${keptDone}개도 목록에 남겨 뒀어요</b>(칩을 다시 누르면 남은 것만)` : ''}</span>` : ''}</div></div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
     ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
     <div class="rs-chips"><span class="rs-lab"><i>3</i>내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div></div>
@@ -1787,7 +1792,7 @@ async function renderResultsAll() {
   bindModeBar(B);
   B.querySelectorAll('[data-race]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.ce = b.dataset.race; RA.sel = null; renderResults(); });
   B.querySelectorAll('[data-ragrp]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.grp = b.dataset.ragrp; RA.type = ''; RA.ce = ''; RA.sel = null; renderResults(); });
-  B.querySelectorAll('[data-rachk]').forEach((b) => b.onclick = () => { RA.chk = b.dataset.rachk; RA.sel = null; renderResults(); });
+  B.querySelectorAll('[data-rachk]').forEach((b) => b.onclick = () => { RA.chk = b.dataset.rachk; RA.keep = null; RA.sel = null; renderResults(); });
   B.querySelectorAll('[data-ratype]').forEach((b) => b.onclick = () => { RA.chk = ''; RA.type = b.dataset.ratype; RA.ce = ''; RA.sel = null; renderResults(); });
   $('#raTodo').onchange = (e) => { RA.onlyTodo = e.target.checked; renderResults(); };
   const rowOf = (key) => rows.find((x) => x.g.list[0].id === key);
