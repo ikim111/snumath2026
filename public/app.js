@@ -2236,7 +2236,10 @@ async function saveFinal(retry = true) {
 }
 
 // ───────── 통계 화면 ─────────
-const ST = { source: 'final', level: 'stage', group: 'book', kinds: null, books: null };
+const ST = { source: 'final', level: 'stage', group: 'book', kinds: null, books: null, endq: 'all' };
+// 단원 마무리 문제(11/14 김형준): 교과서 박스 위치(pos)가 '연습'(중단원 마무리: 스스로 해결하기·배운 내용 확인하기 등) 또는 '평가'(대단원 마무리: 단원 마무리·대단원 평가·학습 점검 등)
+const END_POS = ['연습', '평가'];
+const isEndQ = (u) => !!u && END_POS.includes(u.pos);
 async function renderStats() {
   const B = $('#statsBody');
   ST.kinds ||= [...(S.cfg.defaultKinds || ['main', 'intro'])];
@@ -2269,11 +2272,15 @@ async function renderStats() {
       if (cs.length) recs43.push({ book: id, period: m.period || '?', publisher: m.publisher || '?', u, it, cells: cs, au: auOf.get(u.id) });
     });
   }
+  // 단원 마무리 문제 포함/빼기/마무리만 (과제의 첫 문항 위치로 판단)
+  const recsAll = recs43.length;
+  if (ST.endq !== 'all') { const keep = recs43.filter((r) => (ST.endq === 'only') === isEndQ(r.u)); recs43.length = 0; recs43.push(...keep); }
   const gname = (r) => ST.group === 'book' ? `${r.book} ${r.publisher}` : ST.group === 'period' ? `${r.period} 개정` : r.publisher;
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
   B.innerHTML = `<h2>통계표</h2>
     <div class="bar">
       <div class="grp"><span>자료</span><select id="stSrc">${opt([['final', '최종 코드 (최종 코드 탭에서 정한 것)'], ['mine', `내 코딩 (${esc(S.coder || '이름 미선택')})`]], ST.source)}</select></div>
+      <div class="grp"><span>단원 마무리 문제</span><select id="stEnd">${opt([['all', '포함 (전체)'], ['no', '빼기 (마무리 문제 없이)'], ['only', '마무리 문제만']], ST.endq)}</select><span class="hint">위치 '연습'(중단원)·'평가'(대단원) · ${recs43.length}/${recsAll}건</span></div>
       <div class="grp"><span>묶기</span><select id="stGrp">${opt([['book', '교과서별'], ['period', '시기별'], ['publisher', '출판사별']], ST.group)}</select></div>
     </div>
     <div class="bar">
@@ -2284,6 +2291,7 @@ async function renderStats() {
     ${recs43.length ? '<div class="bar" style="margin-top:16px"><button id="stCsvRec">코딩 기록 CSV (하위 문항별 4×3 칸)</button></div>' : ''}
   `;
   $('#stGrp').onchange = (e) => { ST.group = e.target.value; renderStats(); };
+  $('#stEnd').onchange = (e) => { ST.endq = e.target.value; renderStats(); };
   $('#stSrc').onchange = (e) => { ST.source = e.target.value; renderStats(); };
   B.querySelectorAll('[data-book]').forEach((el) => el.onchange = () => { ST.books = [...B.querySelectorAll('[data-book]:checked')].map((x) => x.dataset.book); renderStats(); });
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
@@ -2291,13 +2299,13 @@ async function renderStats() {
   if ($('#stCsvRec')) $('#stCsvRec').onclick = () => {
     // 4×3 칸 뒤에 7칸(문제해결 F·C·A·I, 소양 K·R·C)을 0/1로 (칸 앞 글자 = 단계, 뒤 글자 = 소양. X(해당 없음)는 모두 0)
     const ST7 = ['F', 'C', 'A', 'I'], LT7 = ['K', 'R', 'C'];
-    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '문제 설정(F)', '자료 수집(C)', '자료 분석(A)', '결과 해석(I)', '지식(K)', '비판적 태도(R)', '의사소통(C)', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
+    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '문제 설정(F)', '자료 수집(C)', '자료 분석(A)', '결과 해석(I)', '지식(K)', '비판적 태도(R)', '의사소통(C)', '단원 마무리 문제', '위치', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
     recs43.forEach(({ book, period, publisher, u, it, cells, au }) => {
       const cs = cells.filter((c) => c && c !== 'X' && c.length === 2);
       rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '),
-        ...ST7.map((k) => (cs.some((c) => c[0] === k) ? 1 : 0)), ...LT7.map((k) => (cs.some((c) => c[1] === k) ? 1 : 0)), au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]);
+        ...ST7.map((k) => (cs.some((c) => c[0] === k) ? 1 : 0)), ...LT7.map((k) => (cs.some((c) => c[1] === k) ? 1 : 0)), isEndQ(u) ? 1 : 0, u.pos || '', au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]);
     });
-    download('코딩기록_4x3.csv', toCSV(rows));
+    download(`코딩기록_4x3${ST.endq === 'no' ? '_마무리빼고' : ST.endq === 'only' ? '_마무리만' : ''}.csv`, toCSV(rows));
   };
 }
 
@@ -2333,7 +2341,7 @@ function au43Csv() {
   const R = AU43.rows; if (!R) return;
   const head = ['구분', '분석 단위 수', ...R.ST4.map((r) => '단계 ' + r + ' 있음'), ...R.LT3.map((l) => '소양 ' + l + ' 있음'), '해당 없음', ...R.CELLS];
   const line = (g, rs) => [g, rs.length, ...R.ST4.map((r) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[0] === r)).length), ...R.LT3.map((l) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[1] === l)).length), rs.filter((a) => a.cells.has('X')).length, ...R.CELLS.map((k) => rs.filter((a) => a.cells.has(k)).length)];
-  download(`4x3_분석단위집계_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
+  download(`4x3_분석단위집계${ST.endq === 'no' ? '_마무리빼고' : ST.endq === 'only' ? '_마무리만' : ''}_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
 }
 
 // Porter 정합성 지수: 같은 시기 교육과정 분포(x)와 교과서 분포(y), 1 - Σ|x−y|/2
