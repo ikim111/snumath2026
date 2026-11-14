@@ -1695,7 +1695,7 @@ const RS_CHECKS = [
     test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /상대적|더 많|더 높|더 무거|많은지|높은 반|많은 반|무거운|키 큰|비교하기|분포 비교|상대 비교/.test(x.text) && !/O,?X|OX|참거짓|용도|총합/.test(x.text) && !c.includes('IR') },
   { id: 'r5ar', name: '분포 치우침·특징 비교인데 AR 없음', rule: '규칙 5: "오른쪽으로 치우쳐 있다" = AR',
     test: (x, c) => ['상대도수', '상자그림'].includes(x.ce) && !x.cur && /치우|모양|특징|분포를 비교|분포 비교|퍼져/.test(x.text) && !c.includes('AR') },
-  { id: 'stale', name: '묶음이 바뀜 · 최종 다시 정하기', rule: '묶기 전에 정한 최종은 문항 하나 기준이라 미정으로 돌림(저장값은 남음)', test: (x) => x.stale },
+  { id: 'stale', name: '묶음이 바뀐 과제 · 최종 다시 정하기', rule: '묶기 전에 정한 최종은 문항 하나 기준이라 미정으로 돌림(저장값은 남음). 다시 정한 과제도 여기 남아요(최종 칸에 ✓)', test: (x) => x.stale || x.regroup },
   { id: 'proj', name: '묶은 프로젝트 (각자 코딩 → 다수결)', rule: '규칙 2: 프로젝트는 하위 활동을 묶어 과제 하나', test: (x) => x.proj },
 ];
 // 내용 요소: 코딩 화면의 내용 요소(unitCE)를 씀. 자료 정리 그래프 네 가지는 하나로 묶음. 한 과제에 여럿이면 CE_PICK 순서로 하나
@@ -1741,7 +1741,9 @@ async function renderResultsAll() {
       const u = g.list[0];
       const title = cur ? (u.orig || u.summary || '') : (taskBase(u.task) || u.summary || '(과제 번호 없음)');
       const text = cur ? (u.orig || u.summary || '') : [...new Set(g.list.map((x) => x.summary || ''))].join(' / ');
-      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: finOk(RA.fins[id].data.au[u.id], g), stale: !!(RA.fins[id].data.au[u.id] && !finOk(RA.fins[id].data.au[u.id], g)), proj: g.list.some((x) => x.aug && x.aug[0] === 'p') });
+      rows.push({ book: id, cur, g, by, ...rsClassify(by), ce: ceOfG(g.list), title, text, fin: finOk(RA.fins[id].data.au[u.id], g), stale: !!(RA.fins[id].data.au[u.id] && !finOk(RA.fins[id].data.au[u.id], g)), proj: g.list.some((x) => x.aug && x.aug[0] === 'p'),
+        // 묶음이 바뀐 과제: 직접 묶음(aug) 또는 11/13 도입 질문 자동 묶음(이름이 다른 도입 질문 여럿). 다시 정한 뒤에도 이 점검에 남김
+        regroup: !cur && g.list.length > 1 && (g.list.some((x) => x.aug && x.aug[0] !== 's') || (g.list.every((x) => (x.kind || 'main') === 'intro') && new Set(g.list.map((x) => taskBase(x.task))).size > 1)) });
     });
   });
   const GORD = ['소양만 다름', '단계만 다름', '단계+소양 다름', '해당없음 포함', '칸만 다름', '일치', '비교 불가'];
@@ -1779,7 +1781,7 @@ async function renderResultsAll() {
   const shortBook = (id) => { const m = S.metas[id] || {}; return m.type === 'curriculum' ? `${m.period || ''} 교육과정` : `${m.period || ''} ${pubName(m.publisher) || ''} ${String(m.title || '').replace(/\s*\(.*$/, '')}`.trim(); };
   B.innerHTML = `<h2>최종 코드 정하기 <span class="hint">모든 목록</span></h2>${rsModeBar()}
     ${rsSumHtml(nE, nCell, nSame, fins(() => true), rows.length, closed ? `아직 안 열린 목록 ${closed}개는 빠짐` : '')}
-    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">회의 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · ${['r5ir', 'r5ar'].includes(RA.chk) ? '낱말로 찾은 후보라 눈으로 확인하세요 · ' : ''}점검 중에는 아래 1·2·3 고르기가 꺼져요${keptDone ? ` · <b>이번에 정한 ${keptDone}개도 목록에 남겨 뒀어요</b>(칩을 다시 누르면 남은 것만)` : ''}</span>` : ''}</div></div>
+    <div class="rs-filter rs-chk"><div class="rs-chips"><span class="rs-lab">회의 점검</span><button class="rs-chip ${RA.chk ? '' : 'on'}" data-rachk="">끄기</button>${RS_CHECKS.map((c) => `<button class="rs-chip p0 ${RA.chk === c.id ? 'on' : ''}" data-rachk="${c.id}" title="${esc(c.rule)}">${esc(c.name)} <b>${c.id === 'stale' ? `남음 ${rows.filter((x) => (x.stale || x.regroup) && !x.fin).length} / ${chkN[c.id]}` : chkN[c.id]}</b></button>`).join('')}${RA.chk ? `<span class="hint">${esc(RS_CHECKS.find((c) => c.id === RA.chk).rule)} · ${['r5ir', 'r5ar'].includes(RA.chk) ? '낱말로 찾은 후보라 눈으로 확인하세요 · ' : ''}점검 중에는 아래 1·2·3 고르기가 꺼져요${keptDone ? ` · <b>이번에 정한 ${keptDone}개도 목록에 남겨 뒀어요</b>(칩을 다시 누르면 남은 것만)` : ''}</span>` : ''}</div></div>
     <div class="rs-filter"><div class="rs-chips"><span class="rs-lab"><i>1</i>큰 묶음</span><button class="rs-chip big ${RA.grp ? '' : 'on'}" data-ragrp="">전체 <b>${rows.length}</b></button>${GORD.filter((x) => gcount[x]).map(gchip).join('')}</div>
     ${RA.grp && tOrder.length > 1 ? `<div class="rs-chips"><span class="rs-lab"><i>2</i>무엇이 다른가</span><button class="rs-chip ${RA.type ? '' : 'on'}" data-ratype="">${esc(RA.grp)} 전체 <b>${gcount[RA.grp]}</b></button>${tOrder.map(tchip).join('')}</div>` : ''}
     <div class="rs-chips"><span class="rs-lab"><i>3</i>내용 요소</span><button class="rs-chip ${RA.ce ? '' : 'on'}" data-race="">전체 <b>${rows.filter((x) => inG(x) && inT(x)).length}</b></button>${ceList.filter((c) => ceIn[c]).map(cechip).join('')}</div></div>
