@@ -2273,7 +2273,7 @@ async function renderStats() {
     });
   }
   // 단원 마무리 문제 포함/빼기/마무리만 (과제의 첫 문항 위치로 판단)
-  const recsAll = recs43.length;
+  const recsAll = recs43.length, recsFull = [...recs43];
   if (ST.endq !== 'all') { const keep = recs43.filter((r) => (ST.endq === 'only') === isEndQ(r.u)); recs43.length = 0; recs43.push(...keep); }
   const gname = (r) => ST.group === 'book' ? `${r.book} ${r.publisher}` : ST.group === 'period' ? `${r.period} 개정` : r.publisher;
   const opt = (o, v) => o.map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
@@ -2288,25 +2288,18 @@ async function renderStats() {
       <div class="grp"><span>포함할 유형</span>${Object.entries(KINDS).map(([k, v]) => `<label><input type="checkbox" data-kind="${k}" ${ST.kinds.includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ')}</div>
     </div>
     ${au43Html(recs43, gname)}
-    ${recs43.length ? '<div class="bar" style="margin-top:16px"><button id="stCsvRec">코딩 기록 CSV (하위 문항별 4×3 칸)</button></div>' : ''}
+    ${recsFull.length ? `<h3 style="margin-top:18px">CSV 받기 <span class="hint">(위 고르기와 상관없이 버튼마다 따로 · 마무리 = 중단원·대단원 마무리 문제, 박스 위치 연습·평가)</span></h3>
+      <div class="dl6"><b>분석 단위 집계</b><button data-dl="agg|all">전체</button><button data-dl="agg|no">마무리 제외</button><button data-dl="agg|only">마무리만</button>
+      <b>코딩 기록 (과제별 4×3 + 7칸 0/1)</b><button data-dl="rec|all">전체</button><button data-dl="rec|no">마무리 제외</button><button data-dl="rec|only">마무리만</button></div>` : ''}
   `;
   $('#stGrp').onchange = (e) => { ST.group = e.target.value; renderStats(); };
   $('#stEnd').onchange = (e) => { ST.endq = e.target.value; renderStats(); };
   $('#stSrc').onchange = (e) => { ST.source = e.target.value; renderStats(); };
   B.querySelectorAll('[data-book]').forEach((el) => el.onchange = () => { ST.books = [...B.querySelectorAll('[data-book]:checked')].map((x) => x.dataset.book); renderStats(); });
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
-  if ($('#au43Csv')) $('#au43Csv').onclick = au43Csv;
-  if ($('#stCsvRec')) $('#stCsvRec').onclick = () => {
-    // 4×3 칸 뒤에 7칸(문제해결 F·C·A·I, 소양 K·R·C)을 0/1로 (칸 앞 글자 = 단계, 뒤 글자 = 소양. X(해당 없음)는 모두 0)
-    const ST7 = ['F', 'C', 'A', 'I'], LT7 = ['K', 'R', 'C'];
-    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '문제 설정(F)', '자료 수집(C)', '자료 분석(A)', '결과 해석(I)', '지식(K)', '비판적 태도(R)', '의사소통(C)', '단원 마무리 문제', '위치', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
-    recs43.forEach(({ book, period, publisher, u, it, cells, au }) => {
-      const cs = cells.filter((c) => c && c !== 'X' && c.length === 2);
-      rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '),
-        ...ST7.map((k) => (cs.some((c) => c[0] === k) ? 1 : 0)), ...LT7.map((k) => (cs.some((c) => c[1] === k) ? 1 : 0)), isEndQ(u) ? 1 : 0, u.pos || '', au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]);
-    });
-    download(`코딩기록_4x3${ST.endq === 'no' ? '_마무리빼고' : ST.endq === 'only' ? '_마무리만' : ''}.csv`, toCSV(rows));
-  };
+  const pick = (m) => (m === 'all' ? recsFull : recsFull.filter((r) => (m === 'only') === isEndQ(r.u)));
+  const suf = (m) => (m === 'no' ? '_마무리제외' : m === 'only' ? '_마무리만' : '_전체');
+  B.querySelectorAll('[data-dl]').forEach((b) => b.onclick = () => { const [k, m] = b.dataset.dl.split('|'); (k === 'agg' ? au43Csv : recCsv)(pick(m), suf(m), gname); });
 }
 
 // 분석 단위별 4×3 등장 유무 (11/10 결정: 코딩은 쪼갠 단위, 집계는 교육과정 문장·교과서 과제 번호 하나 = 분석 단위 1개, 같은 칸은 한 번만)
@@ -2334,14 +2327,33 @@ function au43Html(recs43, gname) {
     <h3>4×3 칸별 등장</h3>
     <div class="ov-wrap"><table class="t"><tr><th class="l">구분</th><th>분석 단위</th>${CELLS.map((k) => `<th>${k}</th>`).join('')}</tr>
       ${groups.map((g) => cellRow(g, aus.filter((a) => a.g === g))).join('')}${cellRow('전체', aus, true)}</table></div>
-    <div class="bar"><button id="au43Csv">분석 단위 집계 CSV</button></div>`;
+`;
 }
 const AU43 = { rows: null };
-function au43Csv() {
-  const R = AU43.rows; if (!R) return;
+function au43Agg(recs, gname) {
+  const AU = new Map();
+  recs.forEach((r) => { let a = AU.get(r.au); if (!a) AU.set(r.au, a = { g: gname(r), cells: new Set(), n: 0 }); r.cells.forEach((c) => a.cells.add(c)); a.n++; });
+  const aus = [...AU.values()]; aus.forEach((a) => { if (a.cells.size > 1) a.cells.delete('X'); });
+  const ST4 = ['F', 'C', 'A', 'I'], LT3 = ['K', 'R', 'C'];
+  return { groups: [...new Set(aus.map((a) => a.g))], aus, ST4, LT3, CELLS: ST4.flatMap((r) => LT3.map((c) => r + c)) };
+}
+function au43Csv(recs, suf, gname) {
+  const R = au43Agg(recs, gname); if (!R.aus.length) return toast('받을 자료가 없어요.');
   const head = ['구분', '분석 단위 수', ...R.ST4.map((r) => '단계 ' + r + ' 있음'), ...R.LT3.map((l) => '소양 ' + l + ' 있음'), '해당 없음', ...R.CELLS];
   const line = (g, rs) => [g, rs.length, ...R.ST4.map((r) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[0] === r)).length), ...R.LT3.map((l) => rs.filter((a) => [...a.cells].some((c) => c.length === 2 && c[1] === l)).length), rs.filter((a) => a.cells.has('X')).length, ...R.CELLS.map((k) => rs.filter((a) => a.cells.has(k)).length)];
-  download(`4x3_분석단위집계${ST.endq === 'no' ? '_마무리빼고' : ST.endq === 'only' ? '_마무리만' : ''}_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
+  download(`4x3_분석단위집계${suf}_${new Date().toISOString().slice(0, 10)}.csv`, toCSV([head, ...R.groups.map((g) => line(g, R.aus.filter((a) => a.g === g))), line('전체', R.aus)]));
+}
+// 코딩 기록: 과제(최종) 또는 하위 문항(내 코딩)마다 4×3 칸, 7칸 0/1, 마무리 여부
+function recCsv(recs, suf) {
+  if (!recs.length) return toast('받을 자료가 없어요.');
+  const ST7 = ['F', 'C', 'A', 'I'], LT7 = ['K', 'R', 'C'];
+  const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '문제 설정(F)', '자료 수집(C)', '자료 분석(A)', '결과 해석(I)', '지식(K)', '비판적 태도(R)', '의사소통(C)', '단원 마무리 문제', '위치', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
+  recs.forEach(({ book, period, publisher, u, it, cells, au }) => {
+    const cs = cells.filter((c) => c && c !== 'X' && c.length === 2);
+    rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '),
+      ...ST7.map((k) => (cs.some((c) => c[0] === k) ? 1 : 0)), ...LT7.map((k) => (cs.some((c) => c[1] === k) ? 1 : 0)), isEndQ(u) ? 1 : 0, u.pos || '', au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]);
+  });
+  download(`코딩기록_4x3${suf}_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(rows));
 }
 
 // Porter 정합성 지수: 같은 시기 교육과정 분포(x)와 교과서 분포(y), 1 - Σ|x−y|/2
