@@ -2289,8 +2289,14 @@ async function renderStats() {
   B.querySelectorAll('[data-kind]').forEach((el) => el.onchange = () => { ST.kinds = [...B.querySelectorAll('[data-kind]:checked')].map((x) => x.dataset.kind); renderStats(); });
   if ($('#au43Csv')) $('#au43Csv').onclick = au43Csv;
   if ($('#stCsvRec')) $('#stCsvRec').onclick = () => {
-    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
-    recs43.forEach(({ book, period, publisher, u, it, cells, au }) => rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '), au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]));
+    // 4×3 칸 뒤에 7칸(문제해결 F·C·A·I, 소양 K·R·C)을 0/1로 (칸 앞 글자 = 단계, 뒤 글자 = 소양. X(해당 없음)는 모두 0)
+    const ST7 = ['F', 'C', 'A', 'I'], LT7 = ['K', 'R', 'C'];
+    const rows = [['교과서ID', '시기', '출판사', '쪽', '과제', '발문', '4×3 칸', '문제 설정(F)', '자료 수집(C)', '자료 분석(A)', '결과 해석(I)', '지식(K)', '비판적 태도(R)', '의사소통(C)', '분석 단위', '메모', '유형', '성취기준', '단위ID']];
+    recs43.forEach(({ book, period, publisher, u, it, cells, au }) => {
+      const cs = cells.filter((c) => c && c !== 'X' && c.length === 2);
+      rows.push([book, period, publisher, where(book, u), u.task, u.summary, [...cells].sort((a, b) => CELLS12.indexOf(a) - CELLS12.indexOf(b)).join(' '),
+        ...ST7.map((k) => (cs.some((c) => c[0] === k) ? 1 : 0)), ...LT7.map((k) => (cs.some((c) => c[1] === k) ? 1 : 0)), au, it.memo, KINDS[u.kind || 'main'], u.std, u.id]);
+    });
     download('코딩기록_4x3.csv', toCSV(rows));
   };
 }
